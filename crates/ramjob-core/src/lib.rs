@@ -1,3 +1,4 @@
+pub mod config;
 pub mod accountant;
 pub mod enforcer;
 pub mod gate;
