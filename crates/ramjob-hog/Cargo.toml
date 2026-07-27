@@ -1,0 +1,12 @@
+[package]
+name = "ramjob-hog"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ramjob-hog"
+path = "src/main.rs"
+
+[lib]
+name = "ramjob_hog"
+path = "src/lib.rs"

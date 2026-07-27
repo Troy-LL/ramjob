@@ -1,0 +1,11 @@
+[package]
+name = "ramjob-cli"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "ramjob"
+path = "src/main.rs"
+
+[dependencies]
+ramjob-core = { path = "../ramjob-core" }

@@ -1,0 +1,16 @@
+# Lessons index
+
+Repeatable approach failures captured as skills or structural checks.
+
+| Leading word | Path or check | Failure mode |
+|---|---|---|
+| caller-owned cache | [no-premature-global-cache](no-premature-global-cache/SKILL.md) | Process-global PathCache / OnceLock for one-shot CLI; racy parallel tests |
+| link env | [windows-msvc-sdk-env](windows-msvc-sdk-env/SKILL.md) | Incomplete Windows Kits → LNK1181 kernel32.lib |
+| lock across settle | [trim-lock-covers-settle](trim-lock-covers-settle/SKILL.md) | Released trim_lock before settle; dual ΔGF pipelines; classified no-op trims |
+
+## How to add
+
+1. One failure mode → one row.
+2. Prefer a test/lint/CI assert when enforceable in-repo.
+3. Else add `lessons/<slug>/SKILL.md` and link it here.
+4. Merge duplicates on the next lesson-capture pass.

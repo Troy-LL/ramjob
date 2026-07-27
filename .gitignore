@@ -1,0 +1,12 @@
+/target/
+**/*.rs.bk
+.DS_Store
+.claude/
+.codegraph/
+.code-review-graph/
+.superpowers/sdd/*-brief.md
+.superpowers/sdd/*-report.md
+.superpowers/sdd/*-review.md
+!.superpowers/sdd/progress.md
+*.pdb
+*.exe
