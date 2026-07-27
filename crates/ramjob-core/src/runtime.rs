@@ -10,8 +10,8 @@ use crate::enforcer::{
     member_key, soft_trim_group_unlocked, with_trim_lock, ExclusionPolicy, LiveTrimHooks,
     TrimHooks, TRIM_RATE_LIMIT, TrimContext,
 };
-use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput, GroupPhase, TRIM_TARGET_RATIO};
-use crate::grouper::{group_processes, AppGroup, GroupMember};
+use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput, TRIM_TARGET_RATIO};
+use crate::grouper::{group_processes, AppGroup};
 use crate::policy::{PolicyState, SystemArm};
 use crate::pressure::PressureSource;
 use crate::scanner::{enumerate_processes_with_cache, PathCache, ProcessRecord};
@@ -188,7 +188,8 @@ fn estimate_group_gf_after(group: &AppGroup, procs: &[ProcessRecord]) -> u64 {
 mod tests {
     use super::*;
     use crate::config::GroupConfig;
-    use crate::fsm::FsmAction;
+    use crate::fsm::{FsmAction, GroupPhase};
+    use crate::grouper::GroupMember;
     use crate::pressure::SimulatedPressure;
 
     fn app(key: &str, gf: u64) -> AppGroup {
