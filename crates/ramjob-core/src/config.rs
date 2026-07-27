@@ -2,7 +2,7 @@
 
 use std::path::{Path, PathBuf};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_RUNAWAY_MULTIPLIER: f64 = 3.0;
 pub const CONFIG_VERSION: u32 = 2;
@@ -11,7 +11,9 @@ pub const CONFIG_VERSION: u32 = 2;
 pub struct RamjobConfig {
     pub version: u32,
     pub runaway_multiplier: f64,
+    pub overall_limit_bytes: u64,
     pub groups: Vec<GroupConfig>,
+    pub pause_all: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -21,16 +23,20 @@ pub struct GroupConfig {
     pub always_enforce: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct ConfigToml {
     version: u32,
     #[serde(default = "default_runaway_multiplier")]
     runaway_multiplier: f64,
     #[serde(default)]
+    overall_limit_bytes: u64,
+    #[serde(default)]
     group: Vec<GroupConfigToml>,
+    #[serde(default)]
+    pause_all: bool,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Serialize)]
 struct GroupConfigToml {
     key: String,
     #[serde(default)]
@@ -87,6 +93,7 @@ pub fn parse_config(toml_str: &str) -> Result<RamjobConfig, String> {
     Ok(RamjobConfig {
         version: raw.version,
         runaway_multiplier: raw.runaway_multiplier,
+        overall_limit_bytes: raw.overall_limit_bytes,
         groups: raw
             .group
             .into_iter()
@@ -96,6 +103,7 @@ pub fn parse_config(toml_str: &str) -> Result<RamjobConfig, String> {
                 always_enforce: g.always_enforce,
             })
             .collect(),
+        pause_all: raw.pause_all,
     })
 }
 
@@ -109,6 +117,35 @@ pub fn load_config_file(path: &Path) -> Result<RamjobConfig, String> {
         }
         Err(e) => Err(e),
     }
+}
+
+/// Write config atomically: write to .toml.tmp, then rename over original.
+pub fn save_config_atomic(path: &Path, cfg: &RamjobConfig) -> Result<(), String> {
+    let toml_cfg = ConfigToml {
+        version: cfg.version,
+        runaway_multiplier: cfg.runaway_multiplier,
+        overall_limit_bytes: cfg.overall_limit_bytes,
+        group: cfg
+            .groups
+            .iter()
+            .map(|g| GroupConfigToml {
+                key: g.key.clone(),
+                cap_bytes: g.cap_bytes,
+                always_enforce: g.always_enforce,
+            })
+            .collect(),
+        pause_all: cfg.pause_all,
+    };
+
+    let toml_str = toml::to_string(&toml_cfg)
+        .map_err(|e| format!("failed to serialize config: {e}"))?;
+
+    let tmp_path = path.with_extension("toml.tmp");
+    std::fs::write(&tmp_path, &toml_str)
+        .map_err(|e| format!("failed to write temp config {}: {e}", tmp_path.display()))?;
+
+    std::fs::rename(&tmp_path, path)
+        .map_err(|e| format!("failed to rename config: {e}"))
 }
 
 #[cfg(test)]
@@ -130,6 +167,8 @@ always_enforce = false
         .unwrap();
         assert_eq!(c.version, 2);
         assert_eq!(c.runaway_multiplier, 3.0);
+        assert_eq!(c.overall_limit_bytes, 0);
+        assert_eq!(c.pause_all, false);
         assert_eq!(c.groups.len(), 1);
         assert_eq!(c.groups[0].cap_bytes, 4294967296);
     }
@@ -145,6 +184,8 @@ always_enforce = false
         let cfg = load_config_file(&path).unwrap();
         assert_eq!(cfg.version, CONFIG_VERSION);
         assert!(cfg.groups.is_empty());
+        assert_eq!(cfg.overall_limit_bytes, 0);
+        assert_eq!(cfg.pause_all, false);
 
         let bak = dir.join("config.bak");
         let bak_body = std::fs::read_to_string(&bak).unwrap();

@@ -1,4 +1,5 @@
 pub mod accountant;
+pub mod cap_math;
 pub mod config;
 pub mod diagnostics;
 pub mod enforcer;
