@@ -16,7 +16,8 @@ Controller skill for one SPEC milestone at a time. Product is **RamJob**. Stack 
 |------|---------|
 | Before a plan | Brainstorm first; recommendation-first on options; grill-with-docs when OPENs remain; update SPEC (untruncated SOT); then writing-plans |
 | Ticket scope | Only `.scratch/ramjob/issues/` tickets for the **current** milestone |
-| Task dispatch | Every implement/review/fix `Task` uses `subagent_type: "poteto-agent"`; controller uses poteto-mode |
+| Task dispatch | Prefer SDD. Every implement/review/fix `Task` uses `subagent_type: "poteto-agent"`; controller uses poteto-mode. Parent does not hand-code the milestone when SDD fits |
+| Skill creation | writing-great-skills: leading word, Done when, progressive disclosure; prefer test/lint over skill; link lessons from lessons/README.md |
 | Coding models | Weaker than parent; same family (Cursor parent → Cursor model; other parent → weaker same-family). Always pass explicit `model:` on coding Tasks |
 | Thermo timing | Once per milestone after verify. `thermo-nuclear-code-quality-review-subagent`. Never per task |
 | Commits | One commit per SDD task/phase. Message references the ticket |
@@ -43,9 +44,9 @@ Ticket shape. Load [refs/ticket-template.md](refs/ticket-template.md) when autho
 For each ready ticket (blockers done), in blockers-first order.
 
 1. Write a task brief from [refs/implementer-brief.md](refs/implementer-brief.md).
-2. Dispatch implementer via `Task` with `subagent_type: "poteto-agent"`.
-3. On DONE or DONE_WITH_CONCERNS, dispatch task reviewer via `Task` with `subagent_type: "poteto-agent"` (reviewer section of the same ref).
-4. On Critical/Important findings, dispatch fix via `Task` with `subagent_type: "poteto-agent"`, then re-review.
+2. Dispatch implementer via `Task` with `subagent_type: "poteto-agent"` and an explicit `model:` weaker than the parent, same family (see steering `.mdc`).
+3. On DONE or DONE_WITH_CONCERNS, dispatch task reviewer via `Task` with `subagent_type: "poteto-agent"` (in-family, not stronger than parent).
+4. On Critical/Important findings, dispatch fix via `Task` with `subagent_type: "poteto-agent"` + weaker in-family `model:`, then re-review.
 5. Mark the ticket complete in the ledger only after reviewer approval.
 6. Do **not** dispatch thermo in this step.
 

@@ -24,16 +24,31 @@ Do these in order. Do not skip to coding.
 3. **Update SPEC** as source of truth whenever a decision lands (resolved OPENs, milestone shape, thresholds). Design docs amend SPEC; they do not replace it.
 4. **Docs are not truncated.** SPEC and design docs stay complete. Fold amendments into the owning section. Do not replace a full section with a one-line summary that drops rules, tables, or numbers. If content moves, leave a cross-link and keep the canonical text in one place.
 5. **writing-plans** after the user approves the written design.
-6. **Develop** with **SDD** + **poteto-mode** / `subagent_type: "poteto-agent"` for every implementation and per-task review Task. Follow `.cursor/skills/ramjob-milestone-sdd/SKILL.md`.
+6. **Develop with Subagent-Driven Development (preferred default).** Do not hand-implement milestone tickets in the parent when SDD fits. Controller dispatches `poteto-agent` implementers + reviewers per task. Use poteto-mode on the parent. Follow `.cursor/skills/ramjob-milestone-sdd/SKILL.md`.
 7. **Thermo-nuclear code quality review** once per **milestone** (not per task), then fix Critical/Important, then lesson-capture.
-8. **Commits:** one git commit per SDD task (or named phase). Message references the ticket. Branch `milestone/mN-…`.
+8. **Skill creation** when a repeatable process or domain lesson appears — follow `/writing-great-skills` (leading word, checkable Done when, progressive disclosure, no skill spam). Prefer a test/lint over a skill when the lesson is runtime-enforceable. Link new skills from `ramjob-milestone-sdd/lessons/README.md` or promote to `.cursor/skills/` / this `.mdc` when they are always-on.
+9. **Commits:** one git commit per SDD task (or named phase). Message references the ticket. Branch `milestone/mN-…`.
 
 ## How to build (implementation phase)
 
-1. Tickets only under `.scratch/ramjob/issues/` for the current milestone.
-2. Every code `Task` → `poteto-agent` (thermo subagent is the milestone-end exception).
-3. Ledger: `.superpowers/sdd/progress.md`.
-4. Never two implementers on the same crate/tree.
+1. **Prefer SDD.** Parent coordinates; does not soak context writing the whole milestone. Exception: one-liner / single-file fix after thermo when spinning an implementer costs more than the edit.
+2. Tickets only under `.scratch/ramjob/issues/` for the current milestone.
+3. Every code `Task` → `poteto-agent` (thermo subagent is the milestone-end exception).
+4. Ledger: `.superpowers/sdd/progress.md`.
+5. Never two implementers on the same crate/tree.
+
+## Skill creation (proper use)
+
+Use `/writing-great-skills` + Cursor `create-skill` when encoding agent process:
+
+| Prefer | When |
+|---|---|
+| Harness assert / clippy / CI | Lesson is enforceable at runtime or build |
+| Lesson skill under `ramjob-milestone-sdd/lessons/` | Repeatable agent-process failure mode |
+| Project skill under `.cursor/skills/` | Reusable workflow with a clear leading word (user- or model-invoked deliberately) |
+| This `.mdc` bullet | Always-on RamJob constraint that must load every session |
+
+Rules: one failure mode → one skill; leading word; checkable completion criteria; no no-op prose; no truncation of SPEC when the skill only points at it.
 
 ## Model selection (coding Tasks)
 
