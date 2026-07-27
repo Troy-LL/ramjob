@@ -25,22 +25,24 @@ impl PressureSource for SimulatedPressure {
     }
 }
 
-/// Win32 low/high memory-resource notifications.
-/// Hard-fault rate is reported as 0.0 in M2; ARM still needs faults>30 from Simulated
-/// tests. Live ARM uses notification + optional always_enforce/runaway without fault confirm
-/// unless `force_faults` is set for demos.
+/// Win32 low/high memory-resource notifications + ARM fault confirm.
+///
+/// `windows` 0.58 `PERFORMANCE_INFORMATION` has no page-fault counter field, so M2 does not
+/// sample a live hard-fault rate from that API. When `assume_faults_when_low` is true (default),
+/// a signaled LowMemory notification reports 40 faults/s so SPEC §4.1 ARM dwell can complete.
+/// Real hard-fault/sec sampling is a follow-up (PDH / NtQuerySystemInformation).
 pub struct WinPressure {
     low: windows::Win32::Foundation::HANDLE,
     high: windows::Win32::Foundation::HANDLE,
-    /// When true, report faults at 40/s whenever low is signaled (dev override).
+    /// When true and low is signaled, report 40 faults/s (degraded ARM confirm).
     pub assume_faults_when_low: bool,
 }
 
 impl WinPressure {
     pub fn new() -> Result<Self, String> {
         use windows::Win32::System::Memory::{
-            CreateMemoryResourceNotification, LowMemoryResourceNotification,
-            HighMemoryResourceNotification,
+            CreateMemoryResourceNotification, HighMemoryResourceNotification,
+            LowMemoryResourceNotification,
         };
         unsafe {
             let low = CreateMemoryResourceNotification(LowMemoryResourceNotification)
@@ -50,7 +52,7 @@ impl WinPressure {
             Ok(Self {
                 low,
                 high,
-                assume_faults_when_low: false,
+                assume_faults_when_low: true,
             })
         }
     }
@@ -58,8 +60,8 @@ impl WinPressure {
 
 impl PressureSource for WinPressure {
     fn sample(&mut self) -> Result<PressureSample, String> {
-        use windows::Win32::System::Memory::QueryMemoryResourceNotification;
         use windows::Win32::Foundation::BOOL;
+        use windows::Win32::System::Memory::QueryMemoryResourceNotification;
         unsafe {
             let mut low_signaled = BOOL(0);
             QueryMemoryResourceNotification(self.low, &mut low_signaled)
@@ -102,5 +104,11 @@ mod tests {
         let mut s1 = sim.sample().unwrap();
         s1.now = s0.now + ARM_DWELL;
         assert_eq!(policy.update(s1), SystemArm::Armed);
+    }
+
+    #[test]
+    fn win_pressure_defaults_assume_faults_when_low() {
+        let w = WinPressure::new().expect("CreateMemoryResourceNotification");
+        assert!(w.assume_faults_when_low);
     }
 }

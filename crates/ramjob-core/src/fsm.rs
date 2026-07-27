@@ -70,6 +70,12 @@ impl GroupFsm {
         (input.gf as f64) >= thresh
     }
 
+    /// Post-trim FSM feedback (Ry_live, refault, ineffective-trim). Same transition table as
+    /// [`step`](Self::step); call only after a real measured trim with post-sample fields set.
+    pub fn observe_post_trim(&mut self, input: GroupFsmInput) -> FsmAction {
+        self.step(input)
+    }
+
     pub fn step(&mut self, input: GroupFsmInput) -> FsmAction {
         if input.cap_bytes == 0 {
             self.phase = GroupPhase::Idle;

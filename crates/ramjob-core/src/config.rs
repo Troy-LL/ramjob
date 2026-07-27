@@ -1,6 +1,6 @@
 //! Versioned RamJob config.toml parsing (M2).
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use serde::Deserialize;
 
@@ -43,6 +43,38 @@ fn default_runaway_multiplier() -> f64 {
     DEFAULT_RUNAWAY_MULTIPLIER
 }
 
+/// Empty default config body (SPEC §8.3).
+pub fn default_config_template() -> String {
+    format!(
+        "version = {CONFIG_VERSION}\nrunaway_multiplier = {DEFAULT_RUNAWAY_MULTIPLIER}\n"
+    )
+}
+
+fn config_backup_path(path: &Path) -> PathBuf {
+    path.parent()
+        .map(|d| d.join("config.bak"))
+        .unwrap_or_else(|| PathBuf::from("config.bak"))
+}
+
+/// Backup existing file beside `path` as `config.bak`, then write a fresh empty default config.
+pub fn backup_and_regenerate_config(path: &Path, previous_contents: &str) -> Result<RamjobConfig, String> {
+    let bak = config_backup_path(path);
+    std::fs::write(&bak, previous_contents).map_err(|e| {
+        format!(
+            "failed to backup config to {}: {e}",
+            bak.display()
+        )
+    })?;
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)
+            .map_err(|e| format!("create config dir {}: {e}", parent.display()))?;
+    }
+    let template = default_config_template();
+    std::fs::write(path, &template)
+        .map_err(|e| format!("failed to write regenerated config {}: {e}", path.display()))?;
+    parse_config(&template)
+}
+
 pub fn parse_config(toml_str: &str) -> Result<RamjobConfig, String> {
     let raw: ConfigToml =
         toml::from_str(toml_str).map_err(|e| format!("config parse error: {e}"))?;
@@ -70,7 +102,13 @@ pub fn parse_config(toml_str: &str) -> Result<RamjobConfig, String> {
 pub fn load_config_file(path: &Path) -> Result<RamjobConfig, String> {
     let contents = std::fs::read_to_string(path)
         .map_err(|e| format!("failed to read config {}: {e}", path.display()))?;
-    parse_config(&contents)
+    match parse_config(&contents) {
+        Ok(cfg) => Ok(cfg),
+        Err(e) if e.contains("unsupported config version") => {
+            backup_and_regenerate_config(path, &contents)
+        }
+        Err(e) => Err(e),
+    }
 }
 
 #[cfg(test)]
@@ -97,8 +135,22 @@ always_enforce = false
     }
 
     #[test]
-    fn rejects_unknown_version() {
-        assert!(parse_config("version = 99\n").is_err());
+    fn unknown_version_backups_and_regenerates() {
+        let dir = std::env::temp_dir().join(format!("ramjob_cfg_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+        std::fs::write(&path, "version = 99\n[[group]]\nkey = \"old\"\n").unwrap();
+
+        let cfg = load_config_file(&path).unwrap();
+        assert_eq!(cfg.version, CONFIG_VERSION);
+        assert!(cfg.groups.is_empty());
+
+        let bak = dir.join("config.bak");
+        let bak_body = std::fs::read_to_string(&bak).unwrap();
+        assert!(bak_body.contains("version = 99"));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

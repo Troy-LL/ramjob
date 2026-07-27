@@ -15,5 +15,11 @@ M0/M1 closed earlier on this branch history / mainline work.
 | 5 PressureSource | done | `f3ddcf0` |
 | 6 Runtime tick | done | `66fe442` |
 | 7 ramjob run CLI | done | `037bb79` |
-| 8 Integration verify | in progress | |
-| 9 Thermo + lessons | pending | |
+| 8 Integration verify | done | `12da86d` |
+| 9 Thermo + lessons | done | `39ada65` |
+
+## Thermo
+
+- Review: `.superpowers/sdd/m2-thermo-review.md` (once)
+- Fixes: `.superpowers/sdd/task-9-fix-report.md`
+- Lesson: `single-measure-owner`

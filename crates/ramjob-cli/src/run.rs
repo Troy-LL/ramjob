@@ -3,7 +3,7 @@
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
 
-use ramjob_core::config::{load_config_file, parse_config, RamjobConfig, CONFIG_VERSION};
+use ramjob_core::config::{default_config_template, load_config_file, parse_config, RamjobConfig};
 use ramjob_core::pressure::{SimulatedPressure, WinPressure};
 use ramjob_core::runtime::Runtime;
 
@@ -67,7 +67,8 @@ fn ensure_config(path: &Path) -> Result<RamjobConfig, String> {
             .map_err(|e| format!("create config dir {}: {e}", parent.display()))?;
     }
     let template = format!(
-        "version = {CONFIG_VERSION}\nrunaway_multiplier = 3.0\n# [[group]]\n# key = \"...\"\n# cap_bytes = 0\n# always_enforce = false\n"
+        "{}\n# [[group]]\n# key = \"...\"\n# cap_bytes = 0\n# always_enforce = false\n",
+        default_config_template()
     );
     std::fs::write(path, &template)
         .map_err(|e| format!("write config {}: {e}", path.display()))?;
@@ -97,9 +98,17 @@ pub fn run_daemon(args: RunArgs) {
         None
     } else {
         match WinPressure::new() {
-            Ok(w) => Some(w),
+            Ok(mut w) => {
+                w.assume_faults_when_low = true;
+                eprintln!(
+                    "ramjob: using WinPressure (low/high notifications; assume_faults_when_low=true for ARM confirm — no live hard-fault counter in M2)"
+                );
+                Some(w)
+            }
             Err(e) => {
-                eprintln!("warning: WinPressure unavailable ({e}); using simulated Disarmed-leaning source");
+                eprintln!(
+                    "ramjob: ERROR WinPressure unavailable ({e}); falling back to SimulatedPressure (Disarmed-leaning — live ARM will not engage from OS pressure)"
+                );
                 None
             }
         }
