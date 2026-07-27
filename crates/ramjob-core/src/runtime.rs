@@ -212,11 +212,13 @@ mod tests {
         let cfg = RamjobConfig {
             version: 2,
             runaway_multiplier: 3.0,
+            overall_limit_bytes: 0,
             groups: vec![GroupConfig {
                 key: "hog".into(),
                 cap_bytes: 100,
                 always_enforce: false,
             }],
+            pause_all: false,
         };
         let mut rt = Runtime::from_config(cfg);
         let now = Instant::now();
@@ -233,11 +235,13 @@ mod tests {
         let mut rt = Runtime::from_config(RamjobConfig {
             version: 2,
             runaway_multiplier: 3.0,
+            overall_limit_bytes: 0,
             groups: vec![GroupConfig {
                 key: "hog".into(),
                 cap_bytes: 100,
                 always_enforce: true,
             }],
+            pause_all: false,
         });
         let now = Instant::now();
         let fsm = rt.groups.entry("hog".into()).or_default();

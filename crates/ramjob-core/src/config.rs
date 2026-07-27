@@ -199,4 +199,36 @@ always_enforce = false
         let c = parse_config("version = 2\n").unwrap();
         assert_eq!(c.runaway_multiplier, DEFAULT_RUNAWAY_MULTIPLIER);
     }
+
+    #[test]
+    fn save_config_atomic_roundtrip() {
+        let dir = std::env::temp_dir().join(format!("ramjob_save_{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let path = dir.join("config.toml");
+
+        let original = RamjobConfig {
+            version: 2,
+            runaway_multiplier: 2.5,
+            overall_limit_bytes: 4 * 1024 * 1024 * 1024,
+            groups: vec![GroupConfig {
+                key: "test_group".into(),
+                cap_bytes: 1024 * 1024 * 1024,
+                always_enforce: true,
+            }],
+            pause_all: true,
+        };
+
+        save_config_atomic(&path, &original).unwrap();
+
+        // Verify tmp file is cleaned up
+        let tmp_path = path.with_extension("toml.tmp");
+        assert!(!tmp_path.exists(), ".toml.tmp should be renamed away");
+
+        // Verify round-trip equality
+        let reloaded = load_config_file(&path).unwrap();
+        assert_eq!(reloaded, original);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

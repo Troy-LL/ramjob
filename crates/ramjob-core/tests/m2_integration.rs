@@ -107,11 +107,13 @@ fn armed_over_cap_trims_once_then_rate_limits() {
         let cfg = RamjobConfig {
             version: 2,
             runaway_multiplier: 3.0,
+            overall_limit_bytes: 0,
             groups: vec![GroupConfig {
                 key: hog.group_key.clone(),
                 cap_bytes: 1_000_000, // 1 MiB — below hog GF
                 always_enforce: false,
             }],
+            pause_all: false,
         };
         let mut rt = Runtime::from_config(cfg);
         let now = Instant::now();
