@@ -14,14 +14,16 @@ Controller skill for one SPEC milestone at a time. Product is **RamJob**. Stack 
 
 | Rule | Binding |
 |------|---------|
+| Before a plan | Brainstorm first; recommendation-first on options; grill-with-docs when OPENs remain; update SPEC (untruncated SOT); then writing-plans |
 | Ticket scope | Only `.scratch/ramjob/issues/` tickets for the **current** milestone |
-| Task dispatch | Every `Task` uses `subagent_type: "poteto-agent"` (thermo is the sole exception in step 3) |
-| Thermo timing | Once per milestone after all tickets green and milestone verify. Never per task |
-| Commits | Only when the user explicitly asks |
+| Task dispatch | Every implement/review/fix `Task` uses `subagent_type: "poteto-agent"`; controller uses poteto-mode |
+| Coding models | Weaker than parent; same family (Cursor parent → Cursor model; other parent → weaker same-family). Always pass explicit `model:` on coding Tasks |
+| Thermo timing | Once per milestone after verify. `thermo-nuclear-code-quality-review-subagent`. Never per task |
+| Commits | One commit per SDD task/phase. Message references the ticket |
 | SDD ledger | `.superpowers/sdd/progress.md` |
 | Parallel writes | Never two implementers on the same crate or tree |
 | Parallel OK | Explore/research, arena designs, truly disjoint streams only |
-| Later tickets | Do not ticket M3 to M6 until M1 §9.3 is decided |
+| SPEC / docs | Never truncate SOT sections; fold decisions into SPEC when they land |
 
 ## Steps
 

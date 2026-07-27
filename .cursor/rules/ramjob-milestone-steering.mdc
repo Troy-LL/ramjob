@@ -1,5 +1,5 @@
 ---
-description: RamJob milestone steering — commits, lessons, current M
+description: RamJob milestone steering — brainstorm, SPEC, SDD, poteto, thermo
 globs:
 alwaysApply: true
 ---
@@ -10,20 +10,49 @@ alwaysApply: true
 
 **M2 — Policy FSM + pressure gating**  
 Design: `docs/superpowers/specs/2026-07-27-m2-policy-fsm-design.md`  
-Prior: M0/M1 done (list, soft trim, gate). Do not start M3 UI until M2 verify passes.
+Prior: M0/M1 done. Do not start M3 UI until M2 verify passes.
 
-## How to build
+## Pipeline (every milestone / plan)
 
-1. Follow `.cursor/skills/ramjob-milestone-sdd/SKILL.md` (**milestone gate**).
-2. Tickets under `.scratch/ramjob/issues/` for the current milestone only.
-3. All implementation `Task` dispatches use `subagent_type: "poteto-agent"` (thermo at milestone end uses the thermo subagent).
-4. **One git commit per SDD task** (or named phase). Message references the ticket id/title.
-5. Branch: `milestone/m2-policy-fsm` (or `milestone/mN-…` for later).
+Do these in order. Do not skip to coding.
+
+1. **Brainstorm** (`/brainstorming`) before any implementation plan.
+   - Lead every option set with a **recommendation first**, then alternatives.
+   - One clarifying question at a time.
+   - No code until the design is approved and written.
+2. **Grill with docs** (`/grill-with-docs`) when product/OPEN decisions are still fuzzy after brainstorm — retain answers in `SPEC.md` (and design docs under `docs/superpowers/specs/`). Use SPEC as the stateful glossary; do not invent a parallel truth file.
+3. **Update SPEC** as source of truth whenever a decision lands (resolved OPENs, milestone shape, thresholds). Design docs amend SPEC; they do not replace it.
+4. **Docs are not truncated.** SPEC and design docs stay complete. Fold amendments into the owning section. Do not replace a full section with a one-line summary that drops rules, tables, or numbers. If content moves, leave a cross-link and keep the canonical text in one place.
+5. **writing-plans** after the user approves the written design.
+6. **Develop** with **SDD** + **poteto-mode** / `subagent_type: "poteto-agent"` for every implementation and per-task review Task. Follow `.cursor/skills/ramjob-milestone-sdd/SKILL.md`.
+7. **Thermo-nuclear code quality review** once per **milestone** (not per task), then fix Critical/Important, then lesson-capture.
+8. **Commits:** one git commit per SDD task (or named phase). Message references the ticket. Branch `milestone/mN-…`.
+
+## How to build (implementation phase)
+
+1. Tickets only under `.scratch/ramjob/issues/` for the current milestone.
+2. Every code `Task` → `poteto-agent` (thermo subagent is the milestone-end exception).
+3. Ledger: `.superpowers/sdd/progress.md`.
+4. Never two implementers on the same crate/tree.
+
+## Model selection (coding Tasks)
+
+Parent (this chat) plans, brainstorms, reviews, and dispatches. **Coding implementers and fix agents must use a weaker model than the parent.**
+
+| Rule | Binding |
+|---|---|
+| Strength | Coding `Task` model is strictly weaker / cheaper than the parent model (never equal or stronger). |
+| Family match | If the parent is a **Cursor** model (Composer / Cursor-branded), dispatch **Cursor** models only. If the parent is another provider (Claude, GPT, Grok API, etc.), dispatch a weaker model from **that same family**, not a Cursor model (and not a cross-family jump). |
+| Who it applies to | Implementer and fix `poteto-agent` Tasks that write code. |
+| Who it does not force-weaken | Parent controller; brainstorming; writing-plans; grill-with-docs; milestone thermo (judgment may stay strong). Task reviewers may use mid-tier in-family, still not stronger than parent. |
+| Always set `model:` | Do not omit `model` on coding Tasks (omission inherits the parent and violates “weaker”). |
+
+Pick the weakest in-family model that can still follow a precise task brief. Mechanical 1–2 file tasks → fastest tier. Multi-file integration → mid tier, still below parent.
 
 ## M1 lessons (non-negotiable)
 
 - Runtime yield → **Ry_live**, not Ry_bench.
-- Trim measurement → **lock across settle** (see lessons/trim-lock-covers-settle).
+- Trim measurement → **lock across settle**.
 - No premature process-global caches (caller-owned).
 - NtQSI/trim errors → `Result` / diagnostics, never `.expect` in the hot path.
 - Use `scripts/dev-env.ps1` when `link.exe` / SDK libs are missing.
@@ -34,10 +63,13 @@ When an approach fails or a review/thermo finding costs a redo:
 
 1. Classify one-off vs repeatable.
 2. Prefer a test/assert if enforceable.
-3. Else add/update a lesson under `.cursor/skills/ramjob-milestone-sdd/lessons/` and link it from `lessons/README.md`.
-4. **Update this `.mdc`** with a one-line bullet under “Failure log” (date + what changed).
+3. Else add/update a lesson under `.cursor/skills/ramjob-milestone-sdd/lessons/` and link from `lessons/README.md`.
+4. **Update this `.mdc`** under “Failure log” (date + what changed).
+5. If the failure changes product truth, **update SPEC** in full (no truncated patch).
 
 ## Failure log
 
-- 2026-07-27 M1: released trim_lock before settle; dual ΔGF pipelines — fixed; lesson `trim-lock-covers-settle`.
-- 2026-07-27 M0: global PathCache / LNK1181 SDK — lessons `no-premature-global-cache`, `windows-msvc-sdk-env`.
+- 2026-07-27 process: coding Tasks weaker than parent + same model family (Cursor→Cursor, else→else).
+- 2026-07-27 process: encode brainstorm→recommend-first→SPEC→plans→SDD/poteto→thermo; SPEC must stay untruncated SOT.
+- 2026-07-27 M1: trim_lock before settle; dual ΔGF — lesson `trim-lock-covers-settle`.
+- 2026-07-27 M0: global PathCache / LNK1181 — lessons `no-premature-global-cache`, `windows-msvc-sdk-env`.
