@@ -208,8 +208,10 @@ Per-app override in the `⚙` menu: **Always enforce** — ignore gating for thi
 the user who wants Brave held to 4 GB as a matter of principle. Off by default, with an inline
 note that it may reduce performance when RAM is plentiful.
 
-`[OPEN]` Should a group exceeding, say, 3× its cap force-arm regardless of notification state?
-A runaway leak is worth catching before it becomes system-wide pressure. I lean yes, at 3×.
+**Runaway force-arm (resolved M2):** if `GF ≥ runaway_multiplier × C` (default
+`runaway_multiplier = 3.0`, configurable in config), force-evaluate that group's FSM even
+while the system is DISARMED. Catches a leak before machine-wide pressure. See
+[2026-07-27-m2-policy-fsm-design.md](docs/superpowers/specs/2026-07-27-m2-policy-fsm-design.md).
 
 ### 4.2 Policy FSM
 
@@ -627,7 +629,7 @@ above 0.3% or idle working set above 25 MB fails the build.
 |---|---|---|
 | M0 | CLI: enumerate → group → print GF | Grouping heuristic meets the pass criterion below |
 | **M1** | **Soft trim + harness + compression gate (§9.2)** | **The product's core value proposition is real** |
-| M2 | Policy FSM + pressure gating | Enforcement is correct and doesn't thrash |
+| M2 | Policy FSM + pressure gating (soft trim; Job Object still M4) | Enforcement is correct and doesn't thrash |
 | M3 | Tray + panel + sliders | The UX premise |
 | M4 | Job Object backstop with §3.2 translation, opt-in | Hard cap path |
 | M5 | ETW discovery, adaptive polling, budget instrumentation in CI | §6 targets met |
@@ -653,10 +655,8 @@ have passed** — everything downstream is wasted work otherwise.
 
 1. **Backstop defaults** (§4.2) — auto-enable for Chromium-family apps via a bundled profile
    list? Partly answered by the M1 gate outcome.
-2. **Runaway override** (§4.1) — force-arm a group at 3× its cap regardless of notification
-   state? Push-based pressure (§4.1) reshapes this: "regardless of system pressure" now means
-   regardless of the memory-resource notification state, a cleaner condition than a percentage
-   threshold.
+2. ~~**Runaway override** (§4.1)~~ — **Resolved M2:** default 3×, configurable
+   `runaway_multiplier`; force-arm that group while DISARMED when exceeded.
 3. **`explorer.exe`** (§5.2) — advanced disclosure, or never?
 4. **VS Code sub-grouping** (§5.3) — one group, or split editor / ext-host / terminals?
 5. **Battery** (§6.1) — sleep, or just slow the trim rate?

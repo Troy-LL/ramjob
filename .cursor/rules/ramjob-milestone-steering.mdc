@@ -1,0 +1,43 @@
+---
+description: RamJob milestone steering — commits, lessons, current M
+globs:
+alwaysApply: true
+---
+
+# RamJob milestone steering
+
+## Current milestone
+
+**M2 — Policy FSM + pressure gating**  
+Design: `docs/superpowers/specs/2026-07-27-m2-policy-fsm-design.md`  
+Prior: M0/M1 done (list, soft trim, gate). Do not start M3 UI until M2 verify passes.
+
+## How to build
+
+1. Follow `.cursor/skills/ramjob-milestone-sdd/SKILL.md` (**milestone gate**).
+2. Tickets under `.scratch/ramjob/issues/` for the current milestone only.
+3. All implementation `Task` dispatches use `subagent_type: "poteto-agent"` (thermo at milestone end uses the thermo subagent).
+4. **One git commit per SDD task** (or named phase). Message references the ticket id/title.
+5. Branch: `milestone/m2-policy-fsm` (or `milestone/mN-…` for later).
+
+## M1 lessons (non-negotiable)
+
+- Runtime yield → **Ry_live**, not Ry_bench.
+- Trim measurement → **lock across settle** (see lessons/trim-lock-covers-settle).
+- No premature process-global caches (caller-owned).
+- NtQSI/trim errors → `Result` / diagnostics, never `.expect` in the hot path.
+- Use `scripts/dev-env.ps1` when `link.exe` / SDK libs are missing.
+
+## On failure
+
+When an approach fails or a review/thermo finding costs a redo:
+
+1. Classify one-off vs repeatable.
+2. Prefer a test/assert if enforceable.
+3. Else add/update a lesson under `.cursor/skills/ramjob-milestone-sdd/lessons/` and link it from `lessons/README.md`.
+4. **Update this `.mdc`** with a one-line bullet under “Failure log” (date + what changed).
+
+## Failure log
+
+- 2026-07-27 M1: released trim_lock before settle; dual ΔGF pipelines — fixed; lesson `trim-lock-covers-settle`.
+- 2026-07-27 M0: global PathCache / LNK1181 SDK — lessons `no-premature-global-cache`, `windows-msvc-sdk-env`.
