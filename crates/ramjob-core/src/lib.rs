@@ -1,7 +1,11 @@
-pub mod config;
 pub mod accountant;
+pub mod config;
+pub mod diagnostics;
 pub mod enforcer;
+pub mod fsm;
 pub mod gate;
 pub mod grouper;
+pub mod policy;
+pub mod pressure;
 pub mod scanner;
 pub mod yield_math;
