@@ -1,0 +1,92 @@
+<h2>Armed / Warning — louder pass</h2>
+<p class="subtitle">Light system kept for Dormant. Armed and Warning get stronger chrome (tint, border, weight). Click the pair you prefer, or say what still feels weak.</p>
+
+<div class="cards">
+  <div class="card" data-choice="loud-banner" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#e4e7eb;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <!-- Armed loud banner -->
+      <div style="width:190px;background:#f7f8fa;border:2px solid #c45c26;border-radius:10px;font:10px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:0;overflow:hidden;box-shadow:0 8px 24px rgba(196,92,38,.2);">
+        <div style="background:#c45c26;color:#fff;padding:8px 10px;font-weight:700;font-size:11px;">ARMED — enforcing</div>
+        <div style="padding:10px;">
+          <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span>28.1 / 32</span></div>
+          <div style="height:7px;background:#f0d4c4;margin:6px 0;border-radius:3px;"><div style="width:88%;height:100%;background:#c45c26;border-radius:3px;"></div></div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;"><span>Brave</span><span>4.2 GB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;"><div style="width:70%;height:100%;background:#c45c26;"></div></div>
+          <div style="font-size:9px;color:#c45c26;font-weight:600;">trimming toward 6 GB</div>
+        </div>
+      </div>
+      <!-- Warning loud banner -->
+      <div style="width:190px;background:#f7f8fa;border:2px solid #a15c00;border-radius:10px;font:10px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:0;overflow:hidden;box-shadow:0 8px 24px rgba(161,92,0,.22);">
+        <div style="background:#a15c00;color:#fff;padding:8px 10px;font-weight:700;font-size:11px;">WARNING — low yield</div>
+        <div style="padding:10px;">
+          <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span>27.6 / 32</span></div>
+          <div style="height:7px;background:#f0e0c0;margin:6px 0;border-radius:3px;"><div style="width:86%;height:100%;background:#a15c00;border-radius:3px;"></div></div>
+          <div style="margin-top:8px;padding:8px;background:#fff1d6;border-radius:6px;border:1px solid #e0c48a;font-size:9px;">
+            Brave isn’t freeing much — Windows is compressing.
+            <div style="margin-top:6px;"><span style="display:inline-block;padding:5px 10px;background:#a15c00;color:#fff;border-radius:4px;font-weight:600;">Raise cap</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Solid header bars</h3>
+      <p>Full-width color strip + colored border. Hard to miss; still sits on light body.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="loud-wash" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#e4e7eb;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <div style="width:190px;background:#fff4ee;border:2px solid #c45c26;border-radius:10px;font:10px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:10px;box-shadow:0 8px 24px rgba(196,92,38,.18);">
+        <div style="font-weight:800;color:#c45c26;font-size:12px;letter-spacing:.02em;">● ARMED</div>
+        <div style="font-size:9px;color:#8a3d18;margin:2px 0 8px;">Enforcing caps — memory pressure</div>
+        <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span>28.1 / 32</span></div>
+        <div style="height:8px;background:#f0d4c4;margin:6px 0;border-radius:3px;"><div style="width:88%;height:100%;background:#c45c26;border-radius:3px;"></div></div>
+        <div style="display:flex;justify-content:space-between;margin-top:8px;"><span>Brave</span><span>4.2 GB</span></div>
+        <div style="height:5px;background:#f0d4c4;margin:4px 0;border-radius:2px;"><div style="width:70%;height:100%;background:#c45c26;border-radius:2px;"></div></div>
+      </div>
+      <div style="width:190px;background:#fff8e8;border:2px solid #a15c00;border-radius:10px;font:10px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:10px;box-shadow:0 8px 24px rgba(161,92,0,.18);">
+        <div style="font-weight:800;color:#a15c00;font-size:12px;">▲ WARNING</div>
+        <div style="font-size:9px;color:#6b4500;margin:2px 0 8px;">Brave — low yield / compressing</div>
+        <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span>27.6 / 32</span></div>
+        <div style="height:8px;background:#f0e0c0;margin:6px 0;border-radius:3px;"><div style="width:86%;height:100%;background:#a15c00;border-radius:3px;"></div></div>
+        <div style="margin-top:8px;"><span style="display:inline-block;padding:6px 12px;background:#a15c00;color:#fff;border-radius:4px;font-weight:700;">Raise cap</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Full panel wash</h3>
+      <p>Entire panel tints orange/amber. Strongest “something’s different” signal.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="loud-hybrid" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:12px;background:#e4e7eb;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;">
+      <div style="width:190px;background:#f7f8fa;border-radius:10px;font:10px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:0;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.1);border:1px solid #c9d0d4;border-left:6px solid #c45c26;">
+        <div style="padding:10px;">
+          <div style="display:inline-block;background:#c45c26;color:#fff;font-weight:800;font-size:10px;padding:3px 8px;border-radius:3px;margin-bottom:8px;">ARMED</div>
+          <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span>28.1 / 32</span></div>
+          <div style="height:7px;background:#dde2e8;margin:6px 0;border-radius:3px;"><div style="width:88%;height:100%;background:#c45c26;border-radius:3px;"></div></div>
+          <div style="font-size:9px;color:#c45c26;font-weight:600;">Enforcing under pressure</div>
+          <div style="display:flex;justify-content:space-between;margin-top:8px;"><span>Brave</span><span>4.2 GB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;"><div style="width:70%;height:100%;background:#c45c26;"></div></div>
+        </div>
+      </div>
+      <div style="width:190px;background:#f7f8fa;border-radius:10px;font:10px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:0;overflow:hidden;box-shadow:0 8px 24px rgba(0,0,0,.1);border:1px solid #c9d0d4;border-left:6px solid #a15c00;">
+        <div style="padding:10px;">
+          <div style="display:inline-block;background:#a15c00;color:#fff;font-weight:800;font-size:10px;padding:3px 8px;border-radius:3px;margin-bottom:8px;">WARNING</div>
+          <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span>27.6 / 32</span></div>
+          <div style="height:7px;background:#dde2e8;margin:6px 0;border-radius:3px;"><div style="width:86%;height:100%;background:#a15c00;border-radius:3px;"></div></div>
+          <div style="margin-top:8px;padding:8px;background:#fff6e8;border-radius:6px;font-size:9px;border:1px solid #e0c48a;">
+            Not freeing much — raise cap?
+            <div style="margin-top:6px;"><span style="display:inline-block;padding:5px 10px;background:#a15c00;color:#fff;border-radius:4px;font-weight:700;">Raise cap</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>C — Badge + accent rail</h3>
+      <p>Keeps light body; thick left rail + solid pill. Loud without painting the whole panel.</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:1rem;"><strong>Recommendation: A — Solid header bars</strong> — unmistakable from across the desk, Dormant stays calm light, Armed/Warning can’t be mistaken for “status text only.”</p>

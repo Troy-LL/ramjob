@@ -16,7 +16,7 @@ M0/M1 closed earlier on this branch history / mainline work.
 | 6 Runtime tick | done | `66fe442` |
 | 7 ramjob run CLI | done | `037bb79` |
 | 8 Integration verify | done | `12da86d` |
-| 9 Thermo + lessons | done | `39ada65` |
+| 9 Thermo + lessons | done | (this commit) |
 
 ## Thermo
 

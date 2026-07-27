@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — ceiling vs OS arming</title>
+  <style>
+    :root {
+      --bg: #e4e7eb; --card: #fff; --ink: #1a1d21; --muted: #5c6670;
+      --line: #c9d0d4; --blue: #2f6fed; --green: #1f6b45; --red: #c62828; --amber: #c45c26;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding: 20px; }
+    .wrap { max-width: 880px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 800px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 2px solid var(--line); border-radius: 12px;
+      padding: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,.06);
+    }
+    .card:hover { border-color: var(--blue); }
+    .card.selected { outline: 2px solid var(--blue); border-color: var(--blue); background: #f3f7ff; }
+    .card.rec { border-color: #8eb0f0; }
+    .badge { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: var(--blue); margin-bottom: 6px; }
+    .card h2 { margin: 0 0 8px; font-size: 14px; }
+    .card p { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+    .flow {
+      background: #f7f8fa; border: 1px solid var(--line); border-radius: 8px;
+      padding: 8px; font-size: 11px; font-family: ui-monospace, Consolas, monospace;
+    }
+    .flow .row { display: flex; align-items: center; gap: 6px; margin: 4px 0; }
+    .chip { padding: 2px 6px; border-radius: 4px; background: #e8eaed; font-weight: 700; }
+    .chip.os { background: #e8f0fe; color: var(--blue); }
+    .chip.ceil { background: #fff4ee; color: var(--amber); }
+    .chip.arm { background: #e6f4ec; color: var(--green); }
+    .chip.off { background: #f0f0f0; color: #999; text-decoration: line-through; }
+    .pros { margin: 10px 0 0; padding-left: 16px; font-size: 11px; color: var(--muted); }
+    .rec-note {
+      margin-top: 14px; padding: 12px; background: #e8f0fe; border: 1px solid #b6c9f0;
+      border-radius: 10px; font-size: 12px; color: #3d5a80;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>A — Ceiling vs OS arming</h1>
+    <p class="sub">
+      Your chart stop-loss can arm RamJob when usage crosses it.
+      SPEC also arms from OS low-memory + faults (and runaway).
+      Pick how those rules combine. Click a card.
+    </p>
+
+    <div class="cards">
+      <div class="card" data-choice="ceiling-replaces" onclick="sel(this)">
+        <div class="badge">A</div>
+        <h2>Ceiling replaces OS</h2>
+        <p>Only your overall limit arms the system. OS pressure notifications ignored for Arming.</p>
+        <div class="flow">
+          <div class="row"><span class="chip ceil">cross ceiling</span> → <span class="chip arm">ARMED</span></div>
+          <div class="row"><span class="chip off">OS low-mem</span> → ignored</div>
+          <div class="row"><span class="chip">runaway app</span> → still? (open)</div>
+        </div>
+        <ul class="pros">
+          <li>Simplest story: “I set the line”</li>
+          <li>Ignores real OS pressure until you tune the ceiling</li>
+          <li>Easy to leave Disarmed while Windows is already hurting</li>
+        </ul>
+      </div>
+
+      <div class="card rec" data-choice="either-arms" onclick="sel(this)">
+        <div class="badge">B · RECOMMENDED</div>
+        <h2>Either can arm</h2>
+        <p>Armed if OS pressure <em>or</em> usage crosses your ceiling. Disarm still follows recovery / your rules later.</p>
+        <div class="flow">
+          <div class="row"><span class="chip ceil">cross ceiling</span> → <span class="chip arm">ARMED</span></div>
+          <div class="row"><span class="chip os">OS pressure</span> → <span class="chip arm">ARMED</span></div>
+          <div class="row"><span class="chip">runaway</span> → force path kept</div>
+        </div>
+        <ul class="pros">
+          <li>GX control + real machine safety</li>
+          <li>Matches “stop-loss” without deleting SPEC §4.1</li>
+          <li>Slightly more to explain in the ⓘ copy</li>
+        </ul>
+      </div>
+
+      <div class="card" data-choice="ceiling-visual" onclick="sel(this)">
+        <div class="badge">C</div>
+        <h2>Ceiling visual only</h2>
+        <p>Chart teaches the idea; Arming still only from OS (+ runaway). Crossing the line doesn’t arm by itself.</p>
+        <div class="flow">
+          <div class="row"><span class="chip ceil">cross ceiling</span> → warning UI only</div>
+          <div class="row"><span class="chip os">OS pressure</span> → <span class="chip arm">ARMED</span></div>
+        </div>
+        <ul class="pros">
+          <li>No SPEC change for M3</li>
+          <li>Your stop-loss becomes misleading if it doesn’t arm</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rec-note">
+      <strong>Recommendation: B — either can arm.</strong>
+      Keeps your stop-loss meaningful and still reacts when Windows is in trouble even if the ceiling is set high.
+      We can refine Disarm (who wins when ceiling says “ok” but OS is still low) as a follow-up question.
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>

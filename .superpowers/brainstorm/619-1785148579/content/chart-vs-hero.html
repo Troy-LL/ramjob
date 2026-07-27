@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — chart vs hero gauge</title>
+  <style>
+    :root {
+      --bg: #e4e7eb; --card: #fff; --ink: #1a1d21; --muted: #5c6670;
+      --line: #c9d0d4; --blue: #2f6fed; --green: #1f6b45; --amber: #c45c26;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding: 20px; }
+    .wrap { max-width: 940px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 14px; }
+    .locked {
+      margin: 0 0 14px; padding: 10px 12px; background: #e6f4ec; border: 1px solid #a8d4b8;
+      border-radius: 8px; font-size: 12px; color: var(--green);
+    }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 2px solid var(--line); border-radius: 12px;
+      padding: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,.06);
+    }
+    .card:hover { border-color: var(--blue); }
+    .card.selected { outline: 2px solid var(--blue); border-color: var(--blue); background: #f3f7ff; }
+    .card.rec { border-color: #8eb0f0; }
+    .badge { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: var(--blue); margin-bottom: 6px; }
+    .card h2 { margin: 0 0 8px; font-size: 14px; }
+    .card p { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+    .mock {
+      background: #f0f2f4; border: 1px solid var(--line); border-radius: 8px;
+      padding: 8px; width: 100%; max-width: 260px; margin: 0 auto;
+    }
+    .tray {
+      background: #fff; border: 1px solid #b8c0c8; border-radius: 8px; padding: 8px;
+      height: 160px; display: grid; grid-template-columns: 1.4fr 0.9fr; gap: 6px;
+    }
+    .chart {
+      background: linear-gradient(180deg, #f7f9fb, #eef2f6);
+      border: 1px dashed #b8c0c8; border-radius: 6px; position: relative; overflow: hidden;
+      font-size: 9px; color: #667; padding: 4px;
+    }
+    .chart svg { position: absolute; left: 0; bottom: 8px; width: 100%; height: 70%; }
+    .ceil { stroke: var(--amber); stroke-width: 1.5; stroke-dasharray: 3 2; }
+    .gauge {
+      border-radius: 6px; border: 1px solid #b8c0c8; background: #fafbfc;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      font-size: 9px; color: #445; text-align: center; padding: 4px;
+    }
+    .dial {
+      width: 54px; height: 30px; border: 3px solid #c9d0d4; border-bottom: none;
+      border-radius: 54px 54px 0 0; position: relative; margin-bottom: 4px;
+    }
+    .dial::after {
+      content: ""; position: absolute; width: 2px; height: 22px; background: var(--blue);
+      left: 50%; bottom: 0; transform: translateX(-50%) rotate(25deg); transform-origin: bottom center;
+    }
+    .dial.sys { border-color: #8eb0f0; }
+    .dial.lim { border-color: var(--amber); }
+    .dial.grp { border-color: #7a8; }
+    .tag { font-weight: 700; font-size: 10px; margin-top: 2px; }
+    .pros { margin: 10px 0 0; padding-left: 16px; font-size: 11px; color: var(--muted); }
+    .rec-note {
+      margin-top: 14px; padding: 12px; background: #e8f0fe; border: 1px solid #b6c9f0;
+      border-radius: 10px; font-size: 12px; color: #3d5a80;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Top row — chart vs hero gauge</h1>
+    <p class="sub">In the tray hub, the left chart is system RAM over time + ceiling. What does the big gauge on the right show?</p>
+    <p class="locked">Locked: tray ~420×600 · blue Armed · red Warning · ceiling = visual annotation</p>
+
+    <div class="cards">
+      <div class="card rec" data-choice="system-now" onclick="sel(this)">
+        <div class="badge">A · RECOMMENDED</div>
+        <h2>System RAM now</h2>
+        <p>Chart = history. Hero = current system RAM % (same metric, live needle).</p>
+        <div class="mock">
+          <div class="tray">
+            <div class="chart">
+              history
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline fill="none" stroke="#2f6fed" stroke-width="1.5" points="0,28 15,22 30,25 45,12 60,18 75,10 90,16 100,14" />
+                <line class="ceil" x1="0" y1="14" x2="100" y2="14" />
+              </svg>
+            </div>
+            <div class="gauge"><div class="dial sys"></div><div class="tag">72% sys</div></div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Chart + needle tell one story</li>
+          <li>Matches “system RAM” you already locked</li>
+        </ul>
+      </div>
+
+      <div class="card" data-choice="vs-ceiling" onclick="sel(this)">
+        <div class="badge">B</div>
+        <h2>Headroom to ceiling</h2>
+        <p>Hero = how close you are to your stop-loss line (e.g. 1.2 GB under).</p>
+        <div class="mock">
+          <div class="tray">
+            <div class="chart">
+              history
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline fill="none" stroke="#2f6fed" stroke-width="1.5" points="0,28 15,22 30,25 45,12 60,18 75,10 90,16 100,14" />
+                <line class="ceil" x1="0" y1="14" x2="100" y2="14" />
+              </svg>
+            </div>
+            <div class="gauge"><div class="dial lim"></div><div class="tag">−1.2 GB</div></div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Makes the stop-loss feel tangible</li>
+          <li>Two different units next to each other (history % vs GB gap)</li>
+        </ul>
+      </div>
+
+      <div class="card" data-choice="managed-sum" onclick="sel(this)">
+        <div class="badge">C</div>
+        <h2>Managed apps total</h2>
+        <p>Hero = sum of watched groups’ RAM (what RamJob can touch).</p>
+        <div class="mock">
+          <div class="tray">
+            <div class="chart">
+              history
+              <svg viewBox="0 0 100 40" preserveAspectRatio="none">
+                <polyline fill="none" stroke="#2f6fed" stroke-width="1.5" points="0,28 15,22 30,25 45,12 60,18 75,10 90,16 100,14" />
+                <line class="ceil" x1="0" y1="14" x2="100" y2="14" />
+              </svg>
+            </div>
+            <div class="gauge"><div class="dial grp"></div><div class="tag">4.8 GB apps</div></div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Shows “our job” vs whole machine</li>
+          <li>Chart and gauge no longer share a metric — easier to confuse</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rec-note">
+      <strong>Recommendation: A — system RAM now.</strong>
+      History on the left, live needle on the right, same story. Ceiling stays a dashed annotation on the chart (and can also be a tick on the dial).
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>

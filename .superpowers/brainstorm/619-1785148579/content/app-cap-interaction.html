@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — per-app cap interaction</title>
+  <style>
+    :root {
+      --bg: #e4e7eb; --card: #fff; --ink: #1a1d21; --muted: #5c6670;
+      --line: #c9d0d4; --blue: #2f6fed; --green: #1f6b45; --amber: #c45c26;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding: 20px; }
+    .wrap { max-width: 940px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 14px; }
+    .locked {
+      margin: 0 0 14px; padding: 10px 12px; background: #e6f4ec; border: 1px solid #a8d4b8;
+      border-radius: 8px; font-size: 12px; color: var(--green);
+    }
+    .cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+    @media (max-width: 860px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 2px solid var(--line); border-radius: 12px;
+      padding: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,.06);
+    }
+    .card:hover { border-color: var(--blue); }
+    .card.selected { outline: 2px solid var(--blue); border-color: var(--blue); background: #f3f7ff; }
+    .card.rec { border-color: #8eb0f0; }
+    .badge { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: var(--blue); margin-bottom: 6px; }
+    .card h2 { margin: 0 0 8px; font-size: 14px; }
+    .card p { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+    .mock {
+      background: #f0f2f4; border: 1px solid var(--line); border-radius: 8px;
+      padding: 10px; min-height: 150px;
+    }
+    .cell {
+      width: 110px; margin: 0 auto; background: #fff; border: 1px solid #b8c0c8;
+      border-radius: 8px; padding: 8px; text-align: center; font-size: 10px; color: #445;
+      position: relative;
+    }
+    .dial {
+      width: 64px; height: 34px; margin: 0 auto 6px; border: 3px solid #c9d0d4;
+      border-bottom: none; border-radius: 64px 64px 0 0; position: relative;
+    }
+    .dial::after {
+      content: ""; position: absolute; width: 2px; height: 26px; background: var(--blue);
+      left: 50%; bottom: 0; transform: translateX(-50%) rotate(35deg); transform-origin: bottom center;
+    }
+    .tick {
+      position: absolute; width: 8px; height: 8px; background: var(--amber); border-radius: 50%;
+      border: 2px solid #fff; box-shadow: 0 0 0 1px var(--amber);
+      left: 72%; top: 18%; cursor: grab;
+    }
+    .name { font-weight: 700; font-size: 11px; }
+    .meta { color: var(--muted); margin-top: 2px; }
+    .sheet {
+      margin-top: 8px; background: #fff; border: 1px solid #b8c0c8; border-radius: 8px;
+      padding: 8px; font-size: 10px; text-align: left;
+    }
+    .sheet .row { display: flex; justify-content: space-between; margin: 4px 0; }
+    .sheet input {
+      width: 64px; border: 1px solid #c9d0d4; border-radius: 4px; padding: 2px 4px; font-size: 10px;
+    }
+    .hint {
+      position: absolute; right: -4px; top: -4px; background: var(--blue); color: #fff;
+      font-size: 8px; font-weight: 800; padding: 2px 4px; border-radius: 4px;
+    }
+    .pros { margin: 10px 0 0; padding-left: 16px; font-size: 11px; color: var(--muted); }
+    .rec-note {
+      margin-top: 14px; padding: 12px; background: #e8f0fe; border: 1px solid #b6c9f0;
+      border-radius: 10px; font-size: 12px; color: #3d5a80;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Per-app gauges — how do you set the cap?</h1>
+    <p class="sub">Each small gauge shows an app group’s RAM. How should the user change that group’s limit in the tray?</p>
+    <p class="locked">Locked: tray · blue Armed · hero = system RAM now · ceiling = visual only</p>
+
+    <div class="cards">
+      <div class="card" data-choice="drag-tick" onclick="sel(this)">
+        <div class="badge">A</div>
+        <h2>Drag the cap tick</h2>
+        <p>Amber marker on the dial is the cap. Drag it to set. Fast, GX-like, fiddly on a small dial.</p>
+        <div class="mock">
+          <div class="cell">
+            <div class="dial"><span class="tick" title="drag"></span></div>
+            <div class="name">Chrome</div>
+            <div class="meta">2.1 / 3.0 GB</div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Direct on the instrument</li>
+          <li>Hard to be precise at ~100px wide</li>
+        </ul>
+      </div>
+
+      <div class="card rec" data-choice="tap-sheet" onclick="sel(this)">
+        <div class="badge">B · RECOMMENDED</div>
+        <h2>Tap → edit sheet</h2>
+        <p>Gauge is display. Click opens a small sheet: cap GB, enable/disable, maybe protect.</p>
+        <div class="mock">
+          <div class="cell">
+            <span class="hint">tap</span>
+            <div class="dial"></div>
+            <div class="name">Chrome</div>
+            <div class="meta">2.1 / 3.0 GB</div>
+          </div>
+          <div class="sheet">
+            <div class="row"><span>Cap</span><input value="3.0 GB" /></div>
+            <div class="row"><span>Enabled</span><span>on</span></div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Precise; fits tray size</li>
+          <li>Room for more settings later</li>
+          <li>One extra click vs drag</li>
+        </ul>
+      </div>
+
+      <div class="card" data-choice="read-only" onclick="sel(this)">
+        <div class="badge">C</div>
+        <h2>Read-only in M3</h2>
+        <p>Gauges show usage only. Caps edited in config / a later Settings screen.</p>
+        <div class="mock">
+          <div class="cell">
+            <div class="dial"></div>
+            <div class="name">Chrome</div>
+            <div class="meta">2.1 GB · view</div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Smallest M3 scope</li>
+          <li>Weak “I control this” feeling</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rec-note">
+      <strong>Recommendation: B — tap → edit sheet.</strong>
+      Small tray dials are bad for drag precision; a short sheet keeps the hub glanceable and the edit accurate.
+      Cap tick can still be drawn on the dial as a non-draggable marker.
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>
