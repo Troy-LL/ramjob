@@ -88,6 +88,14 @@ impl Runtime {
         apps: &[AppGroup],
         now: Instant,
     ) -> Result<TickOutcome, String> {
+        if self.config.pause_all {
+            self.diagnostics.push("pause_all".to_string());
+            return Ok(TickOutcome {
+                system,
+                trims_attempted: 0,
+            });
+        }
+
         let by_key: HashMap<&str, &AppGroup> =
             apps.iter().map(|g| (g.group_key.as_str(), g)).collect();
         let mut trims_attempted = 0usize;

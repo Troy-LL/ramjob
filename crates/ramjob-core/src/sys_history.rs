@@ -6,7 +6,7 @@ pub const SYS_HISTORY_CAP: usize = 600;
 const CEILING_EDITS_CAP: usize = 128;
 
 /// Single sample of system RAM usage.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct SysSample {
     pub unix_ms: u64,
     pub used_bytes: u64,
@@ -14,7 +14,7 @@ pub struct SysSample {
 }
 
 /// Single ceiling edit event (limit change).
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
 pub struct CeilingEdit {
     pub unix_ms: u64,
     pub overall_limit_bytes: u64,
