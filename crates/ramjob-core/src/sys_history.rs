@@ -1,5 +1,7 @@
 //! System memory history ring + ceiling edit ticks (M3 tray UI).
 
+use std::collections::VecDeque;
+
 pub const SYS_HISTORY_CAP: usize = 600;
 const CEILING_EDITS_CAP: usize = 128;
 
@@ -20,7 +22,7 @@ pub struct CeilingEdit {
 
 /// Ring buffer of system memory samples + ceiling edit history.
 pub struct SysHistory {
-    samples: Vec<SysSample>,
+    samples: VecDeque<SysSample>,
     ceiling_edits: Vec<CeilingEdit>,
 }
 
@@ -28,17 +30,19 @@ impl SysHistory {
     /// Create a new empty history.
     pub fn new() -> Self {
         SysHistory {
-            samples: Vec::with_capacity(SYS_HISTORY_CAP),
+            samples: VecDeque::with_capacity(SYS_HISTORY_CAP),
             ceiling_edits: Vec::with_capacity(CEILING_EDITS_CAP),
         }
     }
 
     /// Push a sample to the ring. Drops the oldest sample if at capacity.
+    /// Maintains contiguous internal layout for efficient slice access.
     pub fn push_sample(&mut self, s: SysSample) {
         if self.samples.len() >= SYS_HISTORY_CAP {
-            self.samples.remove(0);
+            self.samples.pop_front();
         }
-        self.samples.push(s);
+        self.samples.push_back(s);
+        self.samples.make_contiguous();
     }
 
     /// Record a ceiling edit (limit change). Does not push a sample.
@@ -52,7 +56,7 @@ impl SysHistory {
 
     /// View all samples in the ring (oldest to newest).
     pub fn samples(&self) -> &[SysSample] {
-        &self.samples
+        self.samples.as_slices().0
     }
 
     /// View all ceiling edits (oldest to newest).
