@@ -1,5 +1,5 @@
-// RamJob tray panel — shell wiring (Task 7).
-// Task 8/9 fill in .history-chart / .hero-gauge / real app-card gauges.
+// RamJob tray panel — shell wiring (Task 7), history chart (Task 8),
+// hero + per-app gauges with Opera-style limit markers (Task 9).
 
 const MIN_GF_BYTES = 50 * 1024 * 1024; // 50 MB "Show all apps" floor
 const GB = 1024 * 1024 * 1024;
@@ -92,6 +92,27 @@ async function callSetOverallLimit(limitBytes, shiftFine) {
   return MOCK_SNAPSHOT;
 }
 
+async function callSetCap(key, capBytes, shiftFine) {
+  if (isTauri()) {
+    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
+    return invoke("set_cap", { key, capBytes, shiftFine });
+  }
+  const snapped = snapCapBytesPreview(capBytes, shiftFine);
+  const g = MOCK_SNAPSHOT.groups.find((g) => g.key === key);
+  if (g) g.cap_bytes = snapped;
+  return MOCK_SNAPSHOT;
+}
+
+async function callSetFlags(key, alwaysEnforce) {
+  if (isTauri()) {
+    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
+    return invoke("set_flags", { key, alwaysEnforce });
+  }
+  const g = MOCK_SNAPSHOT.groups.find((g) => g.key === key);
+  if (g) g.always_enforce = alwaysEnforce;
+  return MOCK_SNAPSHOT;
+}
+
 function formatBytes(b) {
   const gb = b / (1024 * 1024 * 1024);
   return gb >= 1 ? `${gb.toFixed(1)} GB` : `${Math.round(b / (1024 * 1024))} MB`;
@@ -117,11 +138,147 @@ function renderPill(snapshot) {
   }
 }
 
-function renderAppGrid(snapshot, showAll) {
+// Same ladder as cap_math::CAP_SNAP_BYTES — the shared angular scale for every
+// per-app dial, so an app's marker and fill line up regardless of its cap.
+const DIAL_LADDER_MAX = 16 * GB;
+
+// Per-key live drag preview (cap bytes), so dragging one card's marker never
+// touches IPC until pointer-up commits it. Cleared once the next real
+// snapshot renders that key without an active drag.
+const capDragPreview = {};
+
+function honestMessage(fsmHint, honest) {
+  if (honest) return honest;
+  if (fsmHint === "LowYield") {
+    return "Capping this isn't freeing much — Windows is compressing the memory rather than releasing it. Raising the cap won't cost you much.";
+  }
+  if (fsmHint === "Thrashing") {
+    return "Capping this isn't helping — it keeps reloading from disk. Consider raising the cap.";
+  }
+  return null;
+}
+
+// Semicircle arc gauge (Opera-style): 180deg at the left (value=0) sweeping
+// through the top down to 0deg at the right (value=max). `fillFrac` draws the
+// colored arc; `markerFrac` (optional) draws a draggable dot at that fraction.
+function buildArcGauge({ width, height, fillFrac, fillColor, markerFrac, markerColor, onDrag, onCommit }) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("width", "100%");
+  svg.setAttribute("height", "100%");
+  svg.setAttribute("viewBox", `0 0 ${width} ${height}`);
+  svg.style.display = "block";
+  svg.style.touchAction = "none";
+
+  const cx = width / 2;
+  const cy = height - 6;
+  const r = Math.min(width / 2 - 6, height - 12);
+
+  const pointAt = (frac) => {
+    const angleDeg = 180 - Math.max(0, Math.min(1, frac)) * 180;
+    const rad = (angleDeg * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy - r * Math.sin(rad) };
+  };
+  const arcPath = (fromFrac, toFrac) => {
+    const p0 = pointAt(fromFrac);
+    const p1 = pointAt(toFrac);
+    const largeArc = toFrac - fromFrac > 0.5 ? 1 : 0;
+    return `M${p0.x.toFixed(1)},${p0.y.toFixed(1)} A${r.toFixed(1)},${r.toFixed(1)} 0 ${largeArc} 1 ${p1.x.toFixed(1)},${p1.y.toFixed(1)}`;
+  };
+
+  const track = document.createElementNS(SVG_NS, "path");
+  track.setAttribute("d", arcPath(0, 1));
+  track.setAttribute("fill", "none");
+  track.setAttribute("stroke", "#e4e6e9");
+  track.setAttribute("stroke-width", "6");
+  track.setAttribute("stroke-linecap", "round");
+  svg.appendChild(track);
+
+  if (fillFrac > 0) {
+    const fill = document.createElementNS(SVG_NS, "path");
+    fill.setAttribute("d", arcPath(0, Math.min(1, fillFrac)));
+    fill.setAttribute("fill", "none");
+    fill.setAttribute("stroke", fillColor);
+    fill.setAttribute("stroke-width", "6");
+    fill.setAttribute("stroke-linecap", "round");
+    svg.appendChild(fill);
+  }
+
+  if (markerFrac != null) {
+    const p = pointAt(markerFrac);
+    const marker = document.createElementNS(SVG_NS, "circle");
+    marker.setAttribute("cx", p.x.toFixed(1));
+    marker.setAttribute("cy", p.y.toFixed(1));
+    marker.setAttribute("r", "5.5");
+    marker.setAttribute("fill", markerColor);
+    marker.setAttribute("stroke", "#fff");
+    marker.setAttribute("stroke-width", "1.5");
+    if (onDrag && onCommit) {
+      marker.style.cursor = "ew-resize";
+
+      const fracFromPointer = (clientX, clientY) => {
+        const box = svg.getBoundingClientRect();
+        const scaleX = width / box.width;
+        const scaleY = height / box.height;
+        const x = (clientX - box.left) * scaleX;
+        const y = (clientY - box.top) * scaleY;
+        const angle = Math.atan2(cy - y, x - cx); // 0..PI across the top
+        const clamped = Math.max(0, Math.min(Math.PI, angle));
+        return 1 - clamped / Math.PI;
+      };
+
+      marker.addEventListener("pointerdown", (ev) => {
+        ev.preventDefault();
+        marker.setPointerCapture(ev.pointerId);
+        const onMove = (moveEv) => onDrag(fracFromPointer(moveEv.clientX, moveEv.clientY));
+        const onUp = async (upEv) => {
+          marker.removeEventListener("pointermove", onMove);
+          marker.removeEventListener("pointerup", onUp);
+          await onCommit(fracFromPointer(upEv.clientX, upEv.clientY), upEv.shiftKey);
+        };
+        marker.addEventListener("pointermove", onMove);
+        marker.addEventListener("pointerup", onUp);
+      });
+    }
+    svg.appendChild(marker);
+  }
+
+  return svg;
+}
+
+function renderHeroGauge(snapshot) {
+  const container = document.getElementById("hero-gauge");
+  container.innerHTML = "";
+  const rect = container.getBoundingClientRect();
+  const width = rect.width || 120;
+  const height = rect.height || 130;
+
+  const total = snapshot.total_bytes || 1;
+  const fillFrac = snapshot.used_bytes / total;
+  const svg = buildArcGauge({ width, height, fillFrac, fillColor: "#2f6fed" });
+  container.appendChild(svg);
+
+  const label = document.createElement("div");
+  label.className = "hero-gauge-label";
+  label.textContent = `${formatBytes(snapshot.used_bytes)} / ${formatBytes(total)}`;
+  container.appendChild(label);
+}
+
+// Default sort (SPEC §7.2): capped apps pin to the top; GF descending within
+// each bucket (capped, then uncapped).
+function sortGroups(groups) {
+  return [...groups].sort((a, b) => {
+    const aCapped = a.cap_bytes > 0;
+    const bCapped = b.cap_bytes > 0;
+    if (aCapped !== bCapped) return aCapped ? -1 : 1;
+    return b.gf_bytes - a.gf_bytes;
+  });
+}
+
+function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
   const grid = document.getElementById("app-grid");
   grid.innerHTML = "";
 
-  const groups = [...snapshot.groups].sort((a, b) => b.gf_bytes - a.gf_bytes);
+  const groups = sortGroups(snapshot.groups);
   const hidden = groups.filter((g) => g.gf_bytes < MIN_GF_BYTES);
   document.getElementById("hidden-count").textContent = hidden.length;
 
@@ -130,11 +287,76 @@ function renderAppGrid(snapshot, showAll) {
   for (const g of visible) {
     const card = document.createElement("div");
     card.className = "app-card";
-    card.innerHTML = `
-      <div class="app-name">${g.name}</div>
-      <div class="app-gauge-placeholder"></div>
-      <div class="app-meta">${formatBytes(g.gf_bytes)}${g.cap_bytes ? " / cap " + formatBytes(g.cap_bytes) : ""}</div>
-    `;
+
+    const header = document.createElement("div");
+    header.className = "app-card-header";
+    const nameEl = document.createElement("div");
+    nameEl.className = "app-name";
+    nameEl.textContent = g.name;
+    const gearBtn = document.createElement("button");
+    gearBtn.className = "gear-btn";
+    gearBtn.textContent = "⚙";
+    gearBtn.title = "App options";
+    header.append(nameEl, gearBtn);
+    card.appendChild(header);
+
+    const gaugeWrap = document.createElement("div");
+    gaugeWrap.className = "app-gauge";
+    const rect = { width: 176, height: 62 }; // fits the ~193px card minus padding
+    const preview = capDragPreview[g.key];
+    const capBytes = preview != null ? preview : g.cap_bytes;
+    const fillFrac = Math.min(1, g.gf_bytes / DIAL_LADDER_MAX);
+    const markerFrac = Math.min(1, (capBytes > 0 ? capBytes : DIAL_LADDER_MAX) / DIAL_LADDER_MAX);
+    const gaugeSvg = buildArcGauge({
+      width: rect.width,
+      height: rect.height,
+      fillFrac,
+      fillColor: "#2f6fed",
+      markerFrac,
+      markerColor: "#c8860d",
+      onDrag: (frac) => {
+        capDragPreview[g.key] = Math.round(frac * DIAL_LADDER_MAX);
+        renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag);
+      },
+      onCommit: async (frac, shiftFine) => {
+        delete capDragPreview[g.key];
+        const capBytes = Math.round(frac * DIAL_LADDER_MAX);
+        await onCommitCap(g.key, capBytes, shiftFine);
+      },
+    });
+    gaugeWrap.appendChild(gaugeSvg);
+    card.appendChild(gaugeWrap);
+
+    const meta = document.createElement("div");
+    meta.className = "app-meta";
+    meta.textContent = `${formatBytes(g.gf_bytes)}${g.cap_bytes ? " / cap " + formatBytes(g.cap_bytes) : " / unlimited"}`;
+    card.appendChild(meta);
+
+    const honestText = honestMessage(g.fsm_hint, g.honest);
+    if (honestText) {
+      const warn = document.createElement("div");
+      warn.className = "app-honest";
+      warn.textContent = honestText;
+      card.appendChild(warn);
+    }
+
+    const popover = document.createElement("div");
+    popover.className = "gear-popover hidden";
+    const label = document.createElement("label");
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.checked = g.always_enforce;
+    checkbox.addEventListener("change", async () => {
+      await onToggleFlag(g.key, checkbox.checked);
+    });
+    label.append(checkbox, document.createTextNode(" Always enforce (hard backstop)"));
+    popover.appendChild(label);
+    card.appendChild(popover);
+
+    gearBtn.addEventListener("click", () => {
+      popover.classList.toggle("hidden");
+    });
+
     grid.appendChild(card);
   }
 }
@@ -309,7 +531,19 @@ async function main() {
   const render = () => {
     renderPill(snapshot);
     renderStatusLine(snapshot);
-    renderAppGrid(snapshot, showAll);
+    renderHeroGauge(snapshot);
+    renderAppGrid(
+      snapshot,
+      showAll,
+      async (key, capBytes, shiftFine) => {
+        snapshot = await callSetCap(key, capBytes, shiftFine);
+        render();
+      },
+      async (key, alwaysEnforce) => {
+        snapshot = await callSetFlags(key, alwaysEnforce);
+        render();
+      }
+    );
     renderPauseButton(snapshot);
     renderHistoryChart(snapshot, async (limitBytes, shiftFine) => {
       snapshot = await callSetOverallLimit(limitBytes, shiftFine);
@@ -327,7 +561,7 @@ async function main() {
 
   document.getElementById("show-all-toggle").addEventListener("click", () => {
     showAll = !showAll;
-    renderAppGrid(snapshot, showAll);
+    render();
   });
 
   document.getElementById("pause-all-btn").addEventListener("click", async () => {

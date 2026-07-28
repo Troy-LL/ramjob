@@ -156,6 +156,7 @@ fn main() {
             commands::get_snapshot,
             commands::set_cap,
             commands::set_overall_limit,
+            commands::set_flags,
             commands::pause_all,
             commands::copy_diagnostics,
         ])

@@ -74,6 +74,23 @@ pub fn set_overall_limit(
 }
 
 #[tauri::command]
+pub fn set_flags(
+    state: State<AppState>,
+    key: String,
+    always_enforce: bool,
+) -> Result<PanelSnapshot, String> {
+    let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    inner.panel.set_flags(&key, always_enforce)?;
+    let (arm, used, total) = (
+        inner.runtime.policy.arm,
+        inner.last_used_bytes,
+        inner.last_total_bytes,
+    );
+    let groups = inner.last_groups.clone();
+    Ok(inner.panel.build_snapshot(arm, used, total, &groups))
+}
+
+#[tauri::command]
 pub fn pause_all(state: State<AppState>, pause: bool) -> Result<PanelSnapshot, String> {
     let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_pause_all(pause)?;

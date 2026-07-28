@@ -78,6 +78,21 @@ impl PanelState {
         save_config_atomic(&self.config_path, &self.config)
     }
 
+    /// Set a group's `always_enforce` flag (opt-in hard backstop), persisting config.
+    /// Creates the group with a zero cap if it doesn't exist yet, same as `set_cap`.
+    pub fn set_flags(&mut self, key: &str, always_enforce: bool) -> Result<(), String> {
+        if let Some(g) = self.config.groups.iter_mut().find(|g| g.key == key) {
+            g.always_enforce = always_enforce;
+        } else {
+            self.config.groups.push(GroupConfig {
+                key: key.to_string(),
+                cap_bytes: 0,
+                always_enforce,
+            });
+        }
+        save_config_atomic(&self.config_path, &self.config)
+    }
+
     pub fn set_pause_all(&mut self, pause: bool) -> Result<(), String> {
         self.config.pause_all = pause;
         save_config_atomic(&self.config_path, &self.config)
@@ -202,6 +217,25 @@ mod tests {
         assert_eq!(s.config.groups.len(), 1);
         assert_eq!(s.config.groups[0].cap_bytes, 4 * 1024 * 1024 * 1024);
         assert!(s.config.groups[0].always_enforce);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_flags_toggles_always_enforce_and_persists() {
+        let path = temp_config_path("flags");
+        let mut s = state(path.clone());
+        s.set_flags("hog", true).unwrap();
+
+        let g = s.config.groups.iter().find(|g| g.key == "hog").unwrap();
+        assert!(g.always_enforce);
+        assert_eq!(g.cap_bytes, 0);
+
+        let reloaded = crate::config::load_config_file(&path).unwrap();
+        assert!(reloaded.groups.iter().find(|g| g.key == "hog").unwrap().always_enforce);
+
+        s.set_flags("hog", false).unwrap();
+        assert!(!s.config.groups.iter().find(|g| g.key == "hog").unwrap().always_enforce);
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
