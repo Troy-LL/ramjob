@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — waveform interpretation v2</title>
+  <style>
+    :root {
+      --bg: #e4e7eb; --panel: #f4f6f8; --card: #fff; --ink: #1a1d21;
+      --muted: #5c6670; --line: #c9d0d4; --blue: #2f6fed; --red: #c62828; --ceil: #c45c26;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding: 20px; }
+    .wrap { max-width: 760px; margin: 0 auto; }
+    .banner { background: #e8f0fe; border: 1px solid #b6c9f0; border-radius: 10px; padding: 12px 14px; margin-bottom: 14px; }
+    .banner strong { color: #1a4a9c; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 10px 28px rgba(0,0,0,.08); }
+    .legend { display: flex; flex-wrap: wrap; gap: 12px 18px; margin: 0 0 12px; font-size: 12px; color: var(--muted); }
+    .legend span { display: inline-flex; align-items: center; gap: 6px; }
+    .swatch { width: 18px; height: 3px; border-radius: 2px; }
+    .chart { position: relative; height: 220px; background: #fafbfc; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+    .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .ylabels { position: absolute; left: 8px; top: 8px; bottom: 8px; width: 40px; font-size: 10px; color: var(--muted); display: flex; flex-direction: column; justify-content: space-between; }
+    .callouts { margin-top: 12px; display: grid; gap: 8px; }
+    .callout { font-size: 12px; padding: 8px 10px; border-radius: 8px; background: #f7f8fa; border-left: 3px solid var(--blue); }
+    .callout.warn { border-left-color: var(--ceil); background: #fff6ef; }
+    .callout.arm { border-left-color: var(--red); background: #fff5f5; }
+    .q { margin-top: 16px; background: #fff; border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+    .q h2 { margin: 0 0 8px; font-size: 16px; }
+    .options { display: flex; flex-direction: column; gap: 8px; }
+    .option { display: flex; gap: 10px; border: 1px solid var(--line); border-radius: 8px; padding: 10px; cursor: pointer; background: #fafbfc; }
+    .option:hover { border-color: var(--blue); }
+    .option.selected { outline: 2px solid var(--blue); background: #eef4ff; }
+    .letter { width: 28px; height: 28px; border-radius: 6px; background: #e8eaed; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">
+      <strong>Waveform v2 — from what you said</strong>
+      <div style="margin-top:6px;color:#3d5a80;font-size:12px;">
+        Blue line = system RAM over time (A).<br/>
+        Vertical dashed lines = moments you changed the overall limit.<br/>
+        Horizontal solid line = ceiling / “stop-loss.” If usage crosses above it → that enables Arming.
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="legend">
+        <span><i class="swatch" style="background:#2f6fed;"></i> System RAM usage</span>
+        <span><i class="swatch" style="background:#c45c26;height:2px;"></i> Overall limit (ceiling)</span>
+        <span style="border-left:2px dashed #888;height:12px;"></span>
+        <span>Limit changed</span>
+        <span style="color:#c62828;font-weight:700;">✕ crossed ceiling → ARM</span>
+      </div>
+
+      <div class="chart" aria-label="system ram history">
+        <div class="ylabels"><span>full</span><span></span><span>empty</span></div>
+        <svg viewBox="0 0 640 220" preserveAspectRatio="none">
+          <!-- ceiling line at y=70 (~68% of chart from top = high RAM) -->
+          <line x1="48" y1="70" x2="620" y2="70" stroke="#c45c26" stroke-width="2.5" />
+          <text x="520" y="62" fill="#c45c26" font-size="11" font-family="Segoe UI" font-weight="700">overall limit</text>
+
+          <!-- vertical dashed: limit changes -->
+          <line x1="200" y1="20" x2="200" y2="200" stroke="#888" stroke-width="1.5" stroke-dasharray="5 4" />
+          <line x1="380" y1="20" x2="380" y2="200" stroke="#888" stroke-width="1.5" stroke-dasharray="5 4" />
+          <text x="205" y="34" fill="#666" font-size="9" font-family="Segoe UI">limit ↓</text>
+          <text x="385" y="34" fill="#666" font-size="9" font-family="Segoe UI">limit ↑</text>
+
+          <!-- usage line: stays under ceiling, then spikes through after second change area -->
+          <polyline fill="none" stroke="#2f6fed" stroke-width="2.5" stroke-linejoin="round"
+            points="48,150 80,145 110,155 140,130 170,140 200,125 230,135 260,110 290,120 320,100 350,115 380,95 410,85 440,55 470,48 500,60 530,45 560,52 590,40 620,50" />
+
+          <!-- mark cross above ceiling -->
+          <circle cx="440" cy="55" r="5" fill="#c62828" />
+          <text x="450" y="50" fill="#c62828" font-size="10" font-family="Segoe UI" font-weight="800">cross → ARM</text>
+        </svg>
+      </div>
+
+      <div class="callouts">
+        <div class="callout">Usage wanders under the ceiling while Disarmed / dormant — caps may exist but system isn’t in pressure mode.</div>
+        <div class="callout warn">Dragging the overall limit moves the horizontal line; each edit stamps a vertical dashed marker.</div>
+        <div class="callout arm">When the blue usage line goes <em>above</em> the ceiling, Arming turns on (your stop-loss rule).</div>
+      </div>
+    </div>
+
+    <div class="q">
+      <h2>Next question</h2>
+      <p style="margin:0 0 10px;color:#5c6670;">
+        SPEC today arms from OS low-memory + hard-faults (and runaway). Your ceiling is a <strong>user-set overall limit</strong> that arms when crossed.
+        How should those relate?
+      </p>
+      <div class="options">
+        <div class="option" data-choice="ceiling-is-arm" onclick="sel(this)">
+          <div class="letter">A</div>
+          <div><strong>Ceiling replaces OS pressure for Arming</strong><br/><span style="color:#5c6670;font-size:12px;">Only your horizontal stop-loss arms the system. Simpler mental model.</span></div>
+        </div>
+        <div class="option" data-choice="ceiling-or-os" onclick="sel(this)">
+          <div class="letter">B</div>
+          <div><strong>Either can arm</strong><br/><span style="color:#5c6670;font-size:12px;">OS pressure <em>or</em> crossing your ceiling → Armed. (Recommended if you want both GX control and real pressure.)</span></div>
+        </div>
+        <div class="option" data-choice="ceiling-visual-only" onclick="sel(this)">
+          <div class="letter">C</div>
+          <div><strong>Ceiling is visual only</strong><br/><span style="color:#5c6670;font-size:12px;">Chart teaches the idea; real ARM still follows SPEC OS signals.</span></div>
+        </div>
+        <div class="option" data-choice="something-else" onclick="sel(this)">
+          <div class="letter">D</div>
+          <div><strong>Something else</strong><br/><span style="color:#5c6670;font-size:12px;">Explain in chat — I’ll redraw.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>

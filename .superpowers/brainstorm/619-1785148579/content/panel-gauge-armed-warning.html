@@ -1,0 +1,89 @@
+<h2>Locked: light instrument cluster</h2>
+<p class="subtitle">Direction = <strong>B</strong> (light chrome + speedometer arcs). Next: how loud should Armed / Warning be on that cluster? Click one.</p>
+
+<div class="cards">
+  <div class="card" data-choice="gauge-loud-header" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#dfe3e8;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <div style="width:200px;background:#f4f6f8;border:2px solid #c45c26;border-radius:12px;overflow:hidden;font:10px/1.3 system-ui,Segoe UI,sans-serif;box-shadow:0 10px 28px rgba(196,92,38,.18);">
+        <div style="background:#c45c26;color:#fff;font-weight:800;padding:7px 10px;letter-spacing:.04em;">ARMED — ENFORCING</div>
+        <div style="padding:10px;color:#1a1d21;">
+          <svg viewBox="0 0 160 90" width="160" height="80" style="display:block;margin:0 auto;">
+            <path d="M20 80 A55 55 0 0 1 140 80" fill="none" stroke="#f0d4c4" stroke-width="12" stroke-linecap="round"/>
+            <path d="M20 80 A55 55 0 0 1 125 55" fill="none" stroke="#c45c26" stroke-width="12" stroke-linecap="round"/>
+            <text x="80" y="68" text-anchor="middle" fill="#c45c26" font-size="16" font-weight="700" font-family="Segoe UI">88%</text>
+            <text x="80" y="82" text-anchor="middle" fill="#5c6670" font-size="8" font-family="Segoe UI">28.1 / 32 GB</text>
+          </svg>
+          <div style="display:flex;gap:6px;margin-top:4px;">
+            <div style="flex:1;background:#fff;border:1px solid #f0d4c4;border-radius:6px;padding:4px;text-align:center;">
+              <svg viewBox="0 0 70 40" width="60" height="36"><path d="M8 36 A26 26 0 0 1 62 36" fill="none" stroke="#f0d4c4" stroke-width="5"/><path d="M8 36 A26 26 0 0 1 48 18" fill="none" stroke="#c45c26" stroke-width="5"/></svg>
+              <div style="font-size:8px;font-weight:600;">Brave</div>
+            </div>
+            <div style="flex:1;background:#fff;border:1px solid #dde2e8;border-radius:6px;padding:4px;text-align:center;">
+              <svg viewBox="0 0 70 40" width="60" height="36"><path d="M8 36 A26 26 0 0 1 62 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A26 26 0 0 1 35 16" fill="none" stroke="#2f6fed" stroke-width="5"/></svg>
+              <div style="font-size:8px;">Spotify</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="width:200px;background:#f4f6f8;border:2px solid #a15c00;border-radius:12px;overflow:hidden;font:10px/1.3 system-ui,Segoe UI,sans-serif;box-shadow:0 10px 28px rgba(161,92,0,.18);">
+        <div style="background:#a15c00;color:#fff;font-weight:800;padding:7px 10px;">WARNING — LOW YIELD</div>
+        <div style="padding:10px;color:#1a1d21;">
+          <svg viewBox="0 0 160 90" width="160" height="80" style="display:block;margin:0 auto;">
+            <path d="M20 80 A55 55 0 0 1 140 80" fill="none" stroke="#f0e0c0" stroke-width="12" stroke-linecap="round"/>
+            <path d="M20 80 A55 55 0 0 1 122 52" fill="none" stroke="#a15c00" stroke-width="12" stroke-linecap="round"/>
+            <text x="80" y="68" text-anchor="middle" fill="#a15c00" font-size="16" font-weight="700" font-family="Segoe UI">86%</text>
+          </svg>
+          <div style="margin-top:4px;padding:8px;background:#fff6e8;border:1px solid #e0c48a;border-radius:6px;font-size:9px;">
+            Brave isn’t freeing much.
+            <div style="margin-top:6px;"><span style="display:inline-block;padding:5px 10px;background:#a15c00;color:#fff;border-radius:4px;font-weight:700;">Raise cap</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>A — Solid header on gauges</h3>
+      <p>Same loud bars as before, over the light cluster. Hard to miss.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="gauge-redline" onclick="toggleSelect(this)">
+    <div class="card-image" style="padding:14px;background:#dfe3e8;display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+      <div style="width:200px;background:#fff4ee;border:2px solid #c45c26;border-radius:12px;padding:10px;font:10px/1.3 system-ui,Segoe UI,sans-serif;color:#1a1d21;box-shadow:0 10px 28px rgba(196,92,38,.2);">
+        <div style="font-weight:800;color:#c45c26;font-size:12px;">● ARMED</div>
+        <div style="font-size:8px;color:#8a3d18;margin-bottom:4px;">Needle in the red — enforcing</div>
+        <svg viewBox="0 0 160 90" width="160" height="78" style="display:block;margin:0 auto;">
+          <path d="M20 80 A55 55 0 0 1 140 80" fill="none" stroke="#f0d4c4" stroke-width="12" stroke-linecap="round"/>
+          <path d="M20 80 A55 55 0 0 1 100 28" fill="none" stroke="#2f6fed" stroke-width="12" stroke-linecap="round"/>
+          <path d="M100 28 A55 55 0 0 1 125 55" fill="none" stroke="#c45c26" stroke-width="12" stroke-linecap="round"/>
+          <text x="80" y="70" text-anchor="middle" fill="#c45c26" font-size="15" font-weight="800" font-family="Segoe UI">88%</text>
+        </svg>
+        <div style="display:flex;gap:6px;">
+          <div style="flex:1;text-align:center;background:#fff;border-radius:6px;padding:4px;border:1px solid #f0d4c4;">
+            <svg viewBox="0 0 70 40" width="56" height="34"><path d="M8 36 A26 26 0 0 1 62 36" fill="none" stroke="#f0d4c4" stroke-width="5"/><path d="M8 36 A26 26 0 0 1 55 22" fill="none" stroke="#c45c26" stroke-width="5"/></svg>
+            <div style="font-size:8px;font-weight:700;color:#c45c26;">Brave redline</div>
+          </div>
+          <div style="flex:1;text-align:center;background:#fff;border-radius:6px;padding:4px;border:1px solid #dde2e8;">
+            <svg viewBox="0 0 70 40" width="56" height="34"><path d="M8 36 A26 26 0 0 1 62 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A26 26 0 0 1 32 16" fill="none" stroke="#2f6fed" stroke-width="5"/></svg>
+            <div style="font-size:8px;">Spotify</div>
+          </div>
+        </div>
+      </div>
+      <div style="width:200px;background:#fff8e8;border:2px solid #a15c00;border-radius:12px;padding:10px;font:10px/1.3 system-ui,Segoe UI,sans-serif;color:#1a1d21;box-shadow:0 10px 28px rgba(161,92,0,.2);">
+        <div style="font-weight:800;color:#a15c00;font-size:12px;">▲ WARNING</div>
+        <div style="font-size:8px;color:#6b4500;margin-bottom:4px;">Gauge pulsing — low yield</div>
+        <svg viewBox="0 0 160 90" width="160" height="78" style="display:block;margin:0 auto;">
+          <path d="M20 80 A55 55 0 0 1 140 80" fill="none" stroke="#f0e0c0" stroke-width="12" stroke-linecap="round"/>
+          <path d="M20 80 A55 55 0 0 1 122 52" fill="none" stroke="#a15c00" stroke-width="12" stroke-linecap="round"/>
+          <text x="80" y="70" text-anchor="middle" fill="#a15c00" font-size="15" font-weight="800" font-family="Segoe UI">86%</text>
+        </svg>
+        <div style="text-align:center;margin-top:4px;"><span style="display:inline-block;padding:6px 12px;background:#a15c00;color:#fff;border-radius:4px;font-weight:800;">Raise cap</span></div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>B — Redline the arcs</h3>
+      <p>Panel wash + last segment of the arc turns danger color. More “car dashboard.”</p>
+    </div>
+  </div>
+</div>
+
+<p class="subtitle" style="margin-top:1rem;"><strong>Recommendation: B — Redline the arcs</strong> — matches the speedometer metaphor (green → blue cruise → orange/red under pressure). Header bars (A) also fine if you want maximum billboard clarity.</p>

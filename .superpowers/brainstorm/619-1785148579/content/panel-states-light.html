@@ -1,0 +1,101 @@
+<h2>Light system — do these three states read clearly?</h2>
+<p class="subtitle">You picked <strong>B</strong>. Same panel chrome; only the system status changes. Click the state that feels weakest / needs work, or click <strong>All clear</strong> if you’re happy.</p>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header">Dormant</div>
+    <div class="mockup-body" style="background:#e4e7eb;padding:16px;">
+      <div style="width:220px;margin:0 auto;background:#f7f8fa;border:1px solid #c9d0d4;border-radius:10px;font:11px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);">
+        <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span style="color:#5c6670;">12.4 / 32 GB</span></div>
+        <div style="height:6px;background:#dde2e8;margin:8px 0;border-radius:3px;overflow:hidden;"><div style="width:39%;height:100%;background:#2f6fed;"></div></div>
+        <div style="display:flex;align-items:flex-start;gap:6px;color:#1f6b45;margin-bottom:8px;font-size:10px;">
+          <span>●</span>
+          <span>Dormant — plenty of RAM free <span style="opacity:.5;">ⓘ</span></span>
+        </div>
+        <div style="border-top:1px solid #dde2e8;padding-top:8px;">
+          <div style="display:flex;justify-content:space-between;"><span>Brave Browser</span><span>4.2 GB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;border-radius:2px;"><div style="width:70%;height:100%;background:#2f6fed;border-radius:2px;"></div></div>
+          <div style="font-size:9px;color:#5c6670;margin-bottom:8px;">cap 6 GB · not enforcing</div>
+          <div style="display:flex;justify-content:space-between;"><span>Spotify</span><span>680 MB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;border-radius:2px;"><div style="width:40%;height:100%;background:#2f6fed;border-radius:2px;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header">Armed</div>
+    <div class="mockup-body" style="background:#e4e7eb;padding:16px;">
+      <div style="width:220px;margin:0 auto;background:#f7f8fa;border:1px solid #c9d0d4;border-radius:10px;font:11px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);">
+        <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span style="color:#5c6670;">28.1 / 32 GB</span></div>
+        <div style="height:6px;background:#dde2e8;margin:8px 0;border-radius:3px;overflow:hidden;"><div style="width:88%;height:100%;background:#c45c26;"></div></div>
+        <div style="display:flex;align-items:flex-start;gap:6px;color:#c45c26;margin-bottom:8px;font-size:10px;">
+          <span>●</span>
+          <span>Armed — enforcing caps under pressure</span>
+        </div>
+        <div style="border-top:1px solid #dde2e8;padding-top:8px;">
+          <div style="display:flex;justify-content:space-between;"><span>Brave Browser</span><span>4.2 GB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;border-radius:2px;"><div style="width:70%;height:100%;background:#c45c26;border-radius:2px;"></div></div>
+          <div style="font-size:9px;color:#c45c26;margin-bottom:8px;">trimming toward 6 GB</div>
+          <div style="display:flex;justify-content:space-between;"><span>Spotify</span><span>680 MB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;border-radius:2px;"><div style="width:40%;height:100%;background:#2f6fed;border-radius:2px;"></div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="split" style="margin-top:1rem;">
+  <div class="mockup">
+    <div class="mockup-header">Warning (LOW_YIELD / THRASHING)</div>
+    <div class="mockup-body" style="background:#e4e7eb;padding:16px;">
+      <div style="width:220px;margin:0 auto;background:#f7f8fa;border:1px solid #c9d0d4;border-radius:10px;font:11px/1.35 system-ui,Segoe UI,sans-serif;color:#1a1d21;padding:12px;box-shadow:0 8px 24px rgba(0,0,0,.08);">
+        <div style="display:flex;justify-content:space-between;font-weight:600;">RamJob <span style="color:#5c6670;">27.6 / 32 GB</span></div>
+        <div style="height:6px;background:#dde2e8;margin:8px 0;border-radius:3px;overflow:hidden;"><div style="width:86%;height:100%;background:#c45c26;"></div></div>
+        <div style="display:flex;align-items:flex-start;gap:6px;color:#a15c00;margin-bottom:8px;font-size:10px;">
+          <span>▲</span>
+          <span>Warning — Brave isn’t freeing much (compressing)</span>
+        </div>
+        <div style="border-top:1px solid #dde2e8;padding-top:8px;">
+          <div style="display:flex;justify-content:space-between;"><span>Brave Browser</span><span>4.1 GB</span></div>
+          <div style="height:4px;background:#dde2e8;margin:4px 0;border-radius:2px;"><div style="width:68%;height:100%;background:#a15c00;border-radius:2px;"></div></div>
+          <div style="margin:8px 0;padding:8px;background:#fff6e8;border-radius:6px;font-size:9px;color:#5c4a2a;">
+            Capping isn’t helping much. Raising the cap won’t cost you much.
+            <div style="margin-top:6px;"><span style="display:inline-block;padding:4px 8px;background:#fff;border:1px solid #d4c4a0;border-radius:4px;">Raise cap</span></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="options" style="align-self:center;">
+    <div class="option" data-choice="all-clear" onclick="toggleSelect(this)">
+      <div class="letter">✓</div>
+      <div class="content">
+        <h3>All clear</h3>
+        <p>Dormant / Armed / Warning all read fine in light system.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="fix-dormant" onclick="toggleSelect(this)">
+      <div class="letter">1</div>
+      <div class="content">
+        <h3>Fix Dormant</h3>
+        <p>Still looks “broken” or too quiet.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="fix-armed" onclick="toggleSelect(this)">
+      <div class="letter">2</div>
+      <div class="content">
+        <h3>Fix Armed</h3>
+        <p>Urgency / color / copy needs work.</p>
+      </div>
+    </div>
+    <div class="option" data-choice="fix-warning" onclick="toggleSelect(this)">
+      <div class="letter">3</div>
+      <div class="content">
+        <h3>Fix Warning</h3>
+        <p>Banner / CTA / honesty text needs work.</p>
+      </div>
+    </div>
+  </div>
+</div>

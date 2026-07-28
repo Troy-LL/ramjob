@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>RamJob</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="panel">
+      <header class="panel-header">
+        <span class="brand">RamJob</span>
+        <span id="state-pill" class="pill pill-idle">Idle</span>
+        <button id="info-btn" class="icon-btn" title="What does this mean?" aria-expanded="false">ⓘ</button>
+      </header>
+
+      <div id="info-popover" class="info-popover hidden">
+        Your caps are set but paused — capping apps when RAM is plentiful only makes things
+        slower. RamJob will step in automatically when memory gets tight.
+      </div>
+
+      <div id="first-run-hint" class="first-run-hint hidden">
+        Set a cap on any app below to get started — RamJob only steps in when memory gets tight.
+      </div>
+
+      <section class="top-row">
+        <div class="history-chart" id="history-chart">
+          <!-- Task 8: system RAM history curve + ceiling + edit ticks -->
+        </div>
+        <div class="hero-gauge" id="hero-gauge">
+          <!-- Task 9: hero gauge, system RAM now -->
+        </div>
+      </section>
+
+      <div class="status-line">
+        <span id="status-dot" class="status-dot"></span>
+        <span id="status-text">Idle — caps set but paused until memory gets tight</span>
+      </div>
+
+      <section class="app-grid-wrap">
+        <div class="app-grid" id="app-grid">
+          <!-- Task 9: per-app gauge+marker cards, populated by app.js -->
+        </div>
+      </section>
+
+      <footer class="panel-footer">
+        <button id="show-all-toggle" class="link-btn">Show all apps (<span id="hidden-count">0</span>) ▾</button>
+        <button id="copy-diagnostics-btn" class="link-btn" title="Copy diagnostics to clipboard">Copy diagnostics</button>
+        <button id="pause-all-btn" class="pause-btn">Pause all ⏸</button>
+      </footer>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>

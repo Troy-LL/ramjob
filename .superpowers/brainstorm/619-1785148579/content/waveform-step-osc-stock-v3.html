@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — waveform v3 (step ceiling + oscillator + stock stop)</title>
+  <style>
+    :root {
+      --bg: #0d1117; --panel: #161b22; --ink: #e6edf3; --muted: #8b949e;
+      --grid: #21262d; --green: #3fb950; --red: #f85149; --blue: #58a6ff; --amber: #d29922;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif;
+      color: var(--ink); background: #010409; padding: 20px;
+    }
+    .wrap { max-width: 820px; margin: 0 auto; }
+    .banner {
+      background: #1c2128; border: 1px solid #30363d; border-radius: 10px;
+      padding: 12px 14px; margin-bottom: 14px; color: var(--muted);
+    }
+    .banner strong { color: var(--ink); }
+    .card {
+      background: var(--panel); border: 1px solid #30363d; border-radius: 12px;
+      padding: 14px; box-shadow: 0 12px 40px rgba(0,0,0,.45);
+    }
+    .toolbar {
+      display: flex; flex-wrap: wrap; gap: 10px 16px; align-items: center;
+      margin-bottom: 10px; font-size: 11px; color: var(--muted);
+    }
+    .toolbar b { color: var(--ink); font-weight: 650; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 2px 8px; border-radius: 99px; background: #21262d; font-size: 11px;
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .chart-wrap {
+      position: relative; height: 280px; border: 1px solid #30363d;
+      border-radius: 8px; background: #0d1117; overflow: hidden;
+    }
+    .chart-wrap svg { width: 100%; height: 100%; display: block; }
+    .notes { display: grid; gap: 8px; margin-top: 12px; }
+    .note {
+      font-size: 12px; padding: 8px 10px; border-radius: 8px;
+      background: #21262d; border-left: 3px solid var(--blue); color: var(--muted);
+    }
+    .note em { color: var(--ink); font-style: normal; }
+    .q {
+      margin-top: 16px; background: var(--panel); border: 1px solid #30363d;
+      border-radius: 12px; padding: 14px;
+    }
+    .q h2 { margin: 0 0 8px; font-size: 16px; }
+    .options { display: flex; flex-direction: column; gap: 8px; }
+    .option {
+      display: flex; gap: 10px; border: 1px solid #30363d; border-radius: 8px;
+      padding: 10px; cursor: pointer; background: #0d1117;
+    }
+    .option:hover { border-color: var(--blue); }
+    .option.selected { outline: 2px solid var(--blue); background: #121a24; }
+    .letter {
+      width: 28px; height: 28px; border-radius: 6px; background: #21262d;
+      display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="banner">
+      <strong>Waveform v3 — corrected</strong><br/>
+      Ceiling is <em style="color:#e6edf3">not</em> one flat line forever — it <strong style="color:#e6edf3">steps</strong> at each vertical marker (when you change the overall limit).
+      Usage reads more like an <strong style="color:#e6edf3">electronic oscillator</strong>.
+      Stop-loss / ceiling drawn in <strong style="color:#e6edf3">stock-chart</strong> style (dark tape, dashed resistance segments).
+    </div>
+
+    <div class="card">
+      <div class="toolbar">
+        <b>SYSTEM RAM</b>
+        <span class="pill"><i class="dot" style="background:#58a6ff"></i> oscillator (usage)</span>
+        <span class="pill"><i class="dot" style="background:#d29922"></i> stop-loss / ceiling (stepped)</span>
+        <span class="pill">┊ limit edit</span>
+        <span class="pill"><i class="dot" style="background:#f85149"></i> breach → ARM</span>
+      </div>
+
+      <div class="chart-wrap">
+        <!--
+          viewBox 0..800 x 0..280
+          y low = high memory (stock charts often invert; we keep top=full like before for RAM)
+          Segments of ceiling:
+            x 40-220:  y=120  (higher ceiling = more room)
+            x 220-420: y=90   (tightened)
+            x 420-760: y=140  (raised again)
+          Verticals at 220 and 420
+          Oscillator: sine-ish around mid, then spikes above segment-2 ceiling near end of middle, and in third segment
+        -->
+        <svg viewBox="0 0 800 280" preserveAspectRatio="none">
+          <!-- grid like trading platform -->
+          <g stroke="#21262d" stroke-width="1">
+            <line x1="40" y1="40" x2="760" y2="40"/>
+            <line x1="40" y1="90" x2="760" y2="90"/>
+            <line x1="40" y1="140" x2="760" y2="140"/>
+            <line x1="40" y1="190" x2="760" y2="190"/>
+            <line x1="40" y1="240" x2="760" y2="240"/>
+            <line x1="160" y1="40" x2="160" y2="240"/>
+            <line x1="320" y1="40" x2="320" y2="240"/>
+            <line x1="480" y1="40" x2="480" y2="240"/>
+            <line x1="640" y1="40" x2="640" y2="240"/>
+          </g>
+
+          <!-- price-axis labels -->
+          <g fill="#8b949e" font-size="10" font-family="Segoe UI, system-ui">
+            <text x="8" y="44">high</text>
+            <text x="8" y="144">mid</text>
+            <text x="8" y="244">low</text>
+          </g>
+
+          <!-- STOP-LOSS / ceiling as STOCK-STYLE dashed resistance — STEPPED -->
+          <!-- segment 1 -->
+          <line x1="40" y1="120" x2="220" y2="120" stroke="#d29922" stroke-width="2" stroke-dasharray="6 4"/>
+          <!-- segment 2 (tighter after edit) -->
+          <line x1="220" y1="85" x2="420" y2="85" stroke="#d29922" stroke-width="2" stroke-dasharray="6 4"/>
+          <!-- segment 3 (raised) -->
+          <line x1="420" y1="130" x2="760" y2="130" stroke="#d29922" stroke-width="2" stroke-dasharray="6 4"/>
+          <!-- little caps on step corners like order brackets -->
+          <line x1="220" y1="120" x2="220" y2="85" stroke="#d29922" stroke-width="1.5" opacity="0.7"/>
+          <line x1="420" y1="85" x2="420" y2="130" stroke="#d29922" stroke-width="1.5" opacity="0.7"/>
+
+          <text x="50" y="112" fill="#d29922" font-size="10" font-family="Segoe UI" font-weight="700">STOP / LIMIT</text>
+          <text x="230" y="77" fill="#d29922" font-size="9" font-family="Segoe UI">new limit</text>
+          <text x="430" y="122" fill="#d29922" font-size="9" font-family="Segoe UI">new limit</text>
+
+          <!-- vertical dashed = limit change events (stock session markers) -->
+          <line x1="220" y1="40" x2="220" y2="240" stroke="#8b949e" stroke-width="1.25" stroke-dasharray="3 5"/>
+          <line x1="420" y1="40" x2="420" y2="240" stroke="#8b949e" stroke-width="1.25" stroke-dasharray="3 5"/>
+          <text x="224" y="54" fill="#8b949e" font-size="9" font-family="Segoe UI">edit</text>
+          <text x="424" y="54" fill="#8b949e" font-size="9" font-family="Segoe UI">edit</text>
+
+          <!-- electronic oscillator usage (angular / ring-mod feel) -->
+          <polyline id="osc" fill="none" stroke="#58a6ff" stroke-width="2.2" stroke-linejoin="miter"
+            points="
+              40,175 55,155 70,190 85,150 100,185 115,148 130,180 145,152 160,178 175,155
+              190,172 205,158 220,165
+              235,150 250,175 265,145 280,170 295,140 310,165 325,135 340,160 355,130 370,155
+              385,120 400,95 410,78 418,70
+              430,145 445,160 460,140 475,165 490,138 505,162 520,142 535,158 550,145
+              565,120 580,150 595,125 610,148 625,118 640,145 655,155 670,140 685,150 700,145 715,152 730,148 745,150 760,147
+            "/>
+
+          <!-- breach markers where osc goes above local stop segment -->
+          <circle cx="410" cy="70" r="4.5" fill="#f85149"/>
+          <text x="418" y="68" fill="#f85149" font-size="10" font-family="Segoe UI" font-weight="800">BREACH → ARM</text>
+        </svg>
+      </div>
+
+      <div class="notes">
+        <div class="note">At each <em>edit</em> (vertical dash), the amber stop-loss <em>jumps</em> to a new level — not one constant line across the whole chart.</div>
+        <div class="note">Blue trace is more <em>oscillator</em> (sharp peaks/troughs) than a smooth stock close line.</div>
+        <div class="note">Amber segments use <em>dashed resistance</em> styling (trading stop / limit feel) on a dark tape background.</div>
+      </div>
+    </div>
+
+    <div class="q">
+      <h2>Does this match what you meant?</h2>
+      <p style="margin:0 0 10px;color:var(--muted);">Especially: stepped stop at each edit + oscillator usage + stock-style dashed ceiling.</p>
+      <div class="options">
+        <div class="option" data-choice="yes-close" onclick="sel(this)">
+          <div class="letter">A</div>
+          <div><strong>Yes — close enough</strong><br/><span style="color:#8b949e;font-size:12px;">Keep refining details later.</span></div>
+        </div>
+        <div class="option" data-choice="more-square-osc" onclick="sel(this)">
+          <div class="letter">B</div>
+          <div><strong>Oscillator should be more square / digital</strong><br/><span style="color:#8b949e;font-size:12px;">Like a scope square wave, not spiky triangle.</span></div>
+        </div>
+        <div class="option" data-choice="more-stock" onclick="sel(this)">
+          <div class="letter">C</div>
+          <div><strong>More stock-market</strong><br/><span style="color:#8b949e;font-size:12px;">Candles / volume / solid price line — stop as classic SL label.</span></div>
+        </div>
+        <div class="option" data-choice="redraw" onclick="sel(this)">
+          <div class="letter">D</div>
+          <div><strong>Still wrong</strong><br/><span style="color:#8b949e;font-size:12px;">Tell me in chat what to fix.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>

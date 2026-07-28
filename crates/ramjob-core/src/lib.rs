@@ -1,6 +1,15 @@
 pub mod accountant;
+pub mod cap_math;
+pub mod config;
+pub mod diagnostics;
 pub mod enforcer;
+pub mod fsm;
 pub mod gate;
 pub mod grouper;
+pub mod panel;
+pub mod policy;
+pub mod pressure;
+pub mod runtime;
 pub mod scanner;
+pub mod sys_history;
 pub mod yield_math;

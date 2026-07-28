@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — surface size</title>
+  <style>
+    :root {
+      --bg: #e4e7eb; --card: #fff; --ink: #1a1d21; --muted: #5c6670;
+      --line: #c9d0d4; --blue: #2f6fed; --green: #1f6b45;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding: 20px; }
+    .wrap { max-width: 920px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .locked {
+      margin: 0 0 14px; padding: 10px 12px; background: #e6f4ec; border: 1px solid #a8d4b8;
+      border-radius: 8px; font-size: 12px; color: var(--green);
+    }
+    .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    @media (max-width: 720px) { .cards { grid-template-columns: 1fr; } }
+    .card {
+      background: var(--card); border: 2px solid var(--line); border-radius: 12px;
+      padding: 12px; cursor: pointer; box-shadow: 0 8px 20px rgba(0,0,0,.06);
+    }
+    .card:hover { border-color: var(--blue); }
+    .card.selected { outline: 2px solid var(--blue); border-color: var(--blue); background: #f3f7ff; }
+    .card.rec { border-color: #8eb0f0; }
+    .badge { font-size: 10px; font-weight: 800; letter-spacing: .04em; color: var(--blue); margin-bottom: 6px; }
+    .card h2 { margin: 0 0 8px; font-size: 14px; }
+    .card p { margin: 0 0 10px; font-size: 12px; color: var(--muted); }
+    .mock {
+      background: #f0f2f4; border: 1px solid var(--line); border-radius: 8px;
+      padding: 10px; display: flex; justify-content: center; align-items: flex-end; min-height: 200px;
+    }
+    .tray {
+      width: 210px; height: 280px; background: #fff; border: 1px solid #b8c0c8; border-radius: 10px;
+      box-shadow: 0 12px 28px rgba(0,0,0,.12); padding: 8px; font-size: 9px; color: #555;
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .tray .bar { height: 28px; background: linear-gradient(90deg, #dce8ff, #f5f7fa); border-radius: 4px; }
+    .tray .g { display: grid; grid-template-columns: 1fr 1fr; gap: 4px; flex: 1; }
+    .tray .cell { background: #eef1f4; border-radius: 4px; }
+    .dash {
+      width: 100%; max-width: 340px; height: 200px; background: #fff; border: 1px solid #b8c0c8;
+      border-radius: 8px; padding: 8px; font-size: 9px; color: #555;
+      display: flex; flex-direction: column; gap: 6px; box-shadow: 0 8px 20px rgba(0,0,0,.08);
+    }
+    .dash .bar { height: 48px; background: linear-gradient(90deg, #dce8ff, #f5f7fa); border-radius: 4px; }
+    .dash .g { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 4px; flex: 1; }
+    .dash .cell { background: #eef1f4; border-radius: 4px; }
+    .dim { font-size: 10px; color: var(--muted); text-align: center; margin-top: 6px; }
+    .pros { margin: 10px 0 0; padding-left: 16px; font-size: 11px; color: var(--muted); }
+    .rec-note {
+      margin-top: 14px; padding: 12px; background: #e8f0fe; border: 1px solid #b6c9f0;
+      border-radius: 10px; font-size: 12px; color: #3d5a80;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Surface — where does the hub live?</h1>
+    <p class="sub">Your sketch is a full instrument hub. SPEC still mentions a tray popover. Pick the primary surface.</p>
+    <p class="locked">Locked: ceiling = visual stop-loss annotation only. Arming still follows real arm config (OS / runaway), not the chart line.</p>
+
+    <div class="cards">
+      <div class="card rec" data-choice="tray" onclick="sel(this)">
+        <div class="badge">A · RECOMMENDED FOR M3</div>
+        <h2>Tray popover (~420×600)</h2>
+        <p>Click tray icon → compact hub. Chart + gauges scaled down. Fast glance, always near the tray.</p>
+        <div class="mock">
+          <div>
+            <div class="tray">
+              <div class="bar">RAM history + ceiling</div>
+              <div class="g">
+                <div class="cell"></div><div class="cell"></div>
+                <div class="cell"></div><div class="cell"></div>
+                <div class="cell"></div><div class="cell"></div>
+              </div>
+            </div>
+            <div class="dim">~420 × 600 · from tray</div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Matches SPEC tray surface; smaller M3 build</li>
+          <li>Always one click from system tray</li>
+          <li>Chart + 6 gauges will feel tight — scroll or fewer apps visible</li>
+        </ul>
+      </div>
+
+      <div class="card" data-choice="window" onclick="sel(this)">
+        <div class="badge">B</div>
+        <h2>Dashboard window (sketch size)</h2>
+        <p>Tray opens a real window — room for history chart + hero gauge + 3×2 apps like your sketch.</p>
+        <div class="mock">
+          <div>
+            <div class="dash">
+              <div class="bar">RAM history + ceiling + hero</div>
+              <div class="g">
+                <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+                <div class="cell"></div><div class="cell"></div><div class="cell"></div>
+              </div>
+            </div>
+            <div class="dim">resizable window · tray still hosts status</div>
+          </div>
+        </div>
+        <ul class="pros">
+          <li>Faithful to your sketch; room to breathe</li>
+          <li>Heavier M3 (window chrome, layout, focus)</li>
+          <li>Can still show a tiny tray tooltip / Armed pill</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="rec-note">
+      <strong>Recommendation: A for M3</strong> if you want shippable tray UI first — keep the sketch as the layout language inside the popover.
+      Pick <strong>B</strong> if the sketch’s breathing room matters more than tray-first shipping.
+      (Hybrid later: popover summary → “Open dashboard” is fine as M3.5, not required now.)
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.card').forEach(c => c.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>

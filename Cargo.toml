@@ -4,4 +4,5 @@ members = [
     "crates/ramjob-core",
     "crates/ramjob-cli",
     "crates/ramjob-hog",
+    "crates/ramjob-app",
 ]

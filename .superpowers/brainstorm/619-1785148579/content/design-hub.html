@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob M3 — design hub</title>
+  <style>
+    :root {
+      --bg: #e4e7eb; --panel: #f4f6f8; --card: #fff; --ink: #1a1d21;
+      --muted: #5c6670; --line: #c9d0d4; --blue: #2f6fed; --green: #1f6b45;
+      --red: #c62828; --amber: #c45c26;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font: 13px/1.45 system-ui, "Segoe UI", sans-serif; color: var(--ink); background: var(--bg); padding: 20px; }
+    .wrap { max-width: 900px; margin: 0 auto; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color: var(--muted); margin: 0 0 16px; }
+    .grid2 { display: grid; grid-template-columns: 1.2fr 0.8fr; gap: 14px; }
+    @media (max-width: 800px) { .grid2 { grid-template-columns: 1fr; } }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; box-shadow: 0 8px 24px rgba(0,0,0,.06); }
+    .card h2 { margin: 0 0 10px; font-size: 14px; }
+    .locked li, .open li { margin: 6px 0; }
+    .tag { display: inline-block; font-size: 10px; font-weight: 700; padding: 2px 6px; border-radius: 4px; margin-right: 4px; }
+    .ok { background: #e6f4ec; color: var(--green); }
+    .tbd { background: #fff6e8; color: #7a6200; }
+    .frame {
+      background: var(--panel); border: 1px solid var(--line); border-radius: 12px;
+      display: grid; grid-template-columns: 1fr 12px; min-height: 420px; overflow: hidden;
+    }
+    .body { padding: 12px; display: flex; flex-direction: column; gap: 10px; }
+    .scroll { background: #dde2e8; border-left: 1px solid var(--line); position: relative; }
+    .scroll::after { content: ""; position: absolute; top: 36px; left: 2px; width: 8px; height: 64px; background: #9aa3ad; border-radius: 4px; }
+    .top { display: grid; grid-template-columns: 1.55fr 0.7fr; gap: 8px; }
+    .box { background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 8px; }
+    .label { font-size: 9px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); font-weight: 700; }
+    .mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .g { text-align: center; background: #fff; border: 1px solid var(--line); border-radius: 8px; padding: 6px; font-size: 10px; }
+    .options { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; }
+    .option {
+      display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--line);
+      border-radius: 8px; padding: 10px; cursor: pointer; background: #fafbfc;
+    }
+    .option:hover { border-color: var(--blue); }
+    .option.selected { outline: 2px solid var(--blue); background: #eef4ff; }
+    .letter { width: 28px; height: 28px; border-radius: 6px; background: #e8eaed; display: flex; align-items: center; justify-content: center; font-weight: 800; flex-shrink: 0; }
+    .note { font-size: 12px; color: var(--muted); margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>M3 design hub</h1>
+    <p class="sub">Backing out of waveform polish — the blue line is just <strong>real RAM usage</strong>, styled however. Here’s the whole picture again: locked calls, open questions, and the panel sketch interpretation.</p>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Panel interpretation (from your sketch)</h2>
+        <div class="frame">
+          <div class="body">
+            <div class="top">
+              <div class="box">
+                <div class="label">System RAM over time</div>
+                <svg viewBox="0 0 280 70" width="100%" height="70">
+                  <line x1="0" y1="28" x2="90" y2="28" stroke="#c45c26" stroke-width="1.5" stroke-dasharray="4 3"/>
+                  <line x1="90" y1="18" x2="180" y2="18" stroke="#c45c26" stroke-width="1.5" stroke-dasharray="4 3"/>
+                  <line x1="180" y1="32" x2="280" y2="32" stroke="#c45c00" stroke-width="1.5" stroke-dasharray="4 3"/>
+                  <line x1="90" y1="8" x2="90" y2="62" stroke="#999" stroke-width="1" stroke-dasharray="2 3"/>
+                  <line x1="180" y1="8" x2="180" y2="62" stroke="#999" stroke-width="1" stroke-dasharray="2 3"/>
+                  <polyline fill="none" stroke="#2f6fed" stroke-width="1.8"
+                    points="0,45 30,42 50,48 70,40 90,43 110,35 130,38 150,30 170,22 180,20 200,40 220,36 240,41 260,38 280,40"/>
+                </svg>
+                <div style="font-size:10px;color:var(--muted);">Amber = stepped overall limit / stop-loss · vertical = you edited limit · cross → arm</div>
+              </div>
+              <div class="box">
+                <div class="label">Live system gauge</div>
+                <div style="display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:700;">
+                  RamJob <span style="font-size:9px;color:var(--blue);background:#e8f0fe;padding:2px 6px;border-radius:99px;">ARMED</span>
+                </div>
+                <svg viewBox="0 0 100 55" width="100%" height="55">
+                  <path d="M12 48 A38 38 0 0 1 88 48" fill="none" stroke="#dde2e8" stroke-width="7" stroke-linecap="round"/>
+                  <path d="M12 48 A38 38 0 0 1 72 22" fill="none" stroke="#2f6fed" stroke-width="7" stroke-linecap="round"/>
+                </svg>
+              </div>
+            </div>
+            <div class="label">App gauges (scroll for more)</div>
+            <div class="mini-grid">
+              <div class="g"><svg viewBox="0 0 80 40" width="70" height="36"><path d="M8 36 A30 30 0 0 1 72 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A30 30 0 0 1 55 16" fill="none" stroke="#2f6fed" stroke-width="5"/></svg><div>Brave</div></div>
+              <div class="g"><svg viewBox="0 0 80 40" width="70" height="36"><path d="M8 36 A30 30 0 0 1 72 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A30 30 0 0 1 45 14" fill="none" stroke="#2f6fed" stroke-width="5"/></svg><div>Discord</div></div>
+              <div class="g"><svg viewBox="0 0 80 40" width="70" height="36"><path d="M8 36 A30 30 0 0 1 72 36" fill="none" stroke="#f0d0d0" stroke-width="5"/><path d="M8 36 A30 30 0 0 1 68 28" fill="none" stroke="#c62828" stroke-width="5"/></svg><div style="color:#c62828;font-weight:700;">Warn</div></div>
+              <div class="g"><svg viewBox="0 0 80 40" width="70" height="36"><path d="M8 36 A30 30 0 0 1 72 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A30 30 0 0 1 40 16" fill="none" stroke="#2f6fed" stroke-width="5"/></svg><div>Spotify</div></div>
+              <div class="g"><svg viewBox="0 0 80 40" width="70" height="36"><path d="M8 36 A30 30 0 0 1 72 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A30 30 0 0 1 35 18" fill="none" stroke="#1f6b45" stroke-width="5"/></svg><div>VS Code</div></div>
+              <div class="g"><svg viewBox="0 0 80 40" width="70" height="36"><path d="M8 36 A30 30 0 0 1 72 36" fill="none" stroke="#dde2e8" stroke-width="5"/><path d="M8 36 A30 30 0 0 1 50 15" fill="none" stroke="#2f6fed" stroke-width="5"/></svg><div>Slack</div></div>
+            </div>
+          </div>
+          <div class="scroll" title="scrollbar"></div>
+        </div>
+        <p class="note">Light instrument-cluster chrome · gauges · bigger than SPEC’s tiny tray popover (still TBD).</p>
+      </div>
+
+      <div>
+        <div class="card locked" style="margin-bottom:14px;">
+          <h2>Locked so far</h2>
+          <ul>
+            <li><span class="tag ok">OK</span> Light system look (not dark GX)</li>
+            <li><span class="tag ok">OK</span> Speedometer gauges (light cluster)</li>
+            <li><span class="tag ok">OK</span> Warning = red; Armed = different (leaning blue)</li>
+            <li><span class="tag ok">OK</span> Top chart = system RAM over time</li>
+            <li><span class="tag ok">OK</span> Vertical dashes = overall-limit edits</li>
+            <li><span class="tag ok">OK</span> Horizontal stop-loss steps at each edit; cross → arm</li>
+            <li><span class="tag ok">OK</span> Wave shape = real usage (don’t over-design oscillation)</li>
+          </ul>
+        </div>
+        <div class="card open">
+          <h2>Still open</h2>
+          <ul>
+            <li><span class="tag tbd">TBD</span> Ceiling vs OS pressure (replace / either / visual-only)</li>
+            <li><span class="tag tbd">TBD</span> Tray popover (~420×600) vs this bigger dashboard</li>
+            <li><span class="tag tbd">TBD</span> Top-right gauge vs top-left chart roles</li>
+            <li><span class="tag tbd">TBD</span> How you set per-app caps on a gauge</li>
+            <li><span class="tag tbd">TBD</span> Armed indicator final (blue / amber / quiet pill)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="margin-top:14px;">
+      <h2>What do you want to talk about next?</h2>
+      <div class="options">
+        <div class="option" data-choice="ceiling-vs-os" onclick="sel(this)">
+          <div class="letter">A</div>
+          <div><strong>Ceiling vs OS arming</strong><br/><span style="color:#5c6670;font-size:12px;">Product rule — biggest open.</span></div>
+        </div>
+        <div class="option" data-choice="shell-size" onclick="sel(this)">
+          <div class="letter">B</div>
+          <div><strong>Tray popover vs big dashboard</strong><br/><span style="color:#5c6670;font-size:12px;">Does your sketch replace SPEC’s small panel?</span></div>
+        </div>
+        <div class="option" data-choice="gauge-interaction" onclick="sel(this)">
+          <div class="letter">C</div>
+          <div><strong>How caps work on gauges</strong><br/><span style="color:#5c6670;font-size:12px;">Drag needle? Slider under arc? Click to edit?</span></div>
+        </div>
+        <div class="option" data-choice="armed-color" onclick="sel(this)">
+          <div class="letter">D</div>
+          <div><strong>Finish Armed color</strong><br/><span style="color:#5c6670;font-size:12px;">Blue / amber / quiet pill (Warning stays red).</span></div>
+        </div>
+        <div class="option" data-choice="something-else" onclick="sel(this)">
+          <div class="letter">E</div>
+          <div><strong>Something else</strong><br/><span style="color:#5c6670;font-size:12px;">Say it in chat.</span></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script>
+    function sel(el) {
+      document.querySelectorAll('.option').forEach(o => o.classList.remove('selected'));
+      el.classList.add('selected');
+    }
+  </script>
+</body>
+</html>

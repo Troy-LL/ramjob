@@ -208,8 +208,10 @@ Per-app override in the `⚙` menu: **Always enforce** — ignore gating for thi
 the user who wants Brave held to 4 GB as a matter of principle. Off by default, with an inline
 note that it may reduce performance when RAM is plentiful.
 
-`[OPEN]` Should a group exceeding, say, 3× its cap force-arm regardless of notification state?
-A runaway leak is worth catching before it becomes system-wide pressure. I lean yes, at 3×.
+**Runaway force-arm (resolved M2):** if `GF ≥ runaway_multiplier × C` (default
+`runaway_multiplier = 3.0`, configurable in config), force-evaluate that group's FSM even
+while the system is DISARMED. Catches a leak before machine-wide pressure. See
+[2026-07-27-m2-policy-fsm-design.md](docs/superpowers/specs/2026-07-27-m2-policy-fsm-design.md).
 
 ### 4.2 Policy FSM
 
@@ -397,39 +399,52 @@ or `THRASHING` group). Left click → panel. Right click → Pause all / Open / 
 
 ### 7.2 Main panel
 Popover anchored to the tray, ~420 × 600, not a window. Instant open, dismiss on focus loss.
+Visual language: **light system chrome** + **instrument-cluster gauges** (not dark GX, not a
+separate dashboard window). Full M3 layout decisions:
+[`docs/superpowers/specs/2026-07-27-m3-tray-ui-design.md`](docs/superpowers/specs/2026-07-27-m3-tray-ui-design.md).
 
 ```
 ┌─────────────────────────────────────────┐
-│  RamJob            12.4 / 32 GB used    │
-│  ▓▓▓▓▓▓▓▓▓▓░░░░░░░░░░░░░░░░░░░░░        │
-│  ● Dormant — plenty of RAM free    ⓘ    │
+│  RamJob     [Armed blue | Idle]    ⓘ    │
+│  ┌──────────────────┐  ┌────────────┐   │
+│  │ system RAM hist. │  │ hero gauge │   │
+│  │ ~~~ real curve   │  │  sys now   │   │
+│  │ — — ceiling — —  │  │            │   │
+│  │ | edit ticks     │  └────────────┘   │
+│  └──────────────────┘                   │
+│  ● Dormant — plenty of RAM free         │
 ├─────────────────────────────────────────┤
-│  🅑  Brave Browser              4.2 GB  │
-│      ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓░░░░░  cap 6 GB     │
-│      ●━━━━━━━━━━━━━○━━━━━━━━━━  [ ⚙ ]   │
-│                                          │
-│  🅢  Spotify                     680 MB  │
-│      ▓▓▓▓▓▓▓░░░░░░░░░░░░░  cap 1 GB     │
-│      ●━━━━○━━━━━━━━━━━━━━━━━━  [ ⚙ ]   │
-│                                          │
-│  🅥  Visual Studio Code          2.1 GB  │
-│      unlimited                           │
-│      ○┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈┈  [ ⚙ ]   │
+│  [app gauge+marker] [app gauge+marker]  │
+│  [app gauge+marker] [app gauge+marker]  │
+│  [app gauge+marker] [app gauge+marker]  │
+│  (scroll when more)              [ ⚙ ]  │
 ├─────────────────────────────────────────┤
 │  Show all apps (14) ▾      Pause all ⏸  │
 └─────────────────────────────────────────┘
 ```
 
-The status line under the system bar is load-bearing: it explains why a set cap isn't currently
-doing anything. Without it, "Dormant" reads as broken. The `ⓘ` expands to: *"Your caps are set
-but paused — capping apps when RAM is plentiful only makes things slower. RamJob will step in
+**Top row:** left = system RAM over time (real curve); right = hero gauge = system RAM **now**
+(same metric). Amber dashed **ceiling** is the user’s overall stop-loss annotation: drag to
+preview, **release commits** — stamps a dashed **vertical** history tick and continues a
+**stepped** horizontal ceiling. Crossing the ceiling is visual only; it does **not** arm
+(§4.1 / M2 still own Arming).
+
+**App grid:** ~3×2 gauges (scroll if more). Each group has its **own Opera-style adjustable
+limit marker** on the dial (drag to set that app’s cap), independent of the system ceiling.
+
+**State colors:** Armed = blue; Warning (`LOW_YIELD` / `THRASHING` / honest-state) = red.
+Armed ≠ Warning.
+
+The status line is load-bearing: it explains why a set cap isn't currently doing anything.
+Without it, "Dormant" / Idle reads as broken. The `ⓘ` expands to: *"Your caps are set but
+paused — capping apps when RAM is plentiful only makes things slower. RamJob will step in
 automatically when memory gets tight."*
 
 - Default sort: GF descending; capped apps pin to the top.
 - Groups ≥ 50 MB by default; "Show all apps" expands.
-- Bar fills against the cap when set, against total RAM when not.
-- Slider snaps to 512 MB, 1, 1.5, 2, 3, 4, 6, 8, 12, 16 GB; fine control on shift-drag.
-  Far-left = unlimited, the default for every app.
+- Gauge fill / needle against the cap when set, against total RAM when not.
+- Limit markers snap to 512 MB, 1, 1.5, 2, 3, 4, 6, 8, 12, 16 GB; fine control on shift-drag.
+  Far end = unlimited, the default for every app.
 - Per-app `⚙`: hard backstop (opt-in), **always enforce** (§4.1), floor override, forget app.
 - Diagnostics: a panel control copies the §8.1 ring buffer plus §5.4 preflight results to the
   clipboard.
@@ -627,7 +642,7 @@ above 0.3% or idle working set above 25 MB fails the build.
 |---|---|---|
 | M0 | CLI: enumerate → group → print GF | Grouping heuristic meets the pass criterion below |
 | **M1** | **Soft trim + harness + compression gate (§9.2)** | **The product's core value proposition is real** |
-| M2 | Policy FSM + pressure gating | Enforcement is correct and doesn't thrash |
+| M2 | Policy FSM + pressure gating (soft trim; Job Object still M4) | Enforcement is correct and doesn't thrash |
 | M3 | Tray + panel + sliders | The UX premise |
 | M4 | Job Object backstop with §3.2 translation, opt-in | Hard cap path |
 | M5 | ETW discovery, adaptive polling, budget instrumentation in CI | §6 targets met |
@@ -647,16 +662,22 @@ M0 and M1 are both gates, in that order. If M0 fails the criterion above, the pr
 fails. If the compression gate fails, the product changes shape. **Do not build UI before both
 have passed** — everything downstream is wasted work otherwise.
 
+**M0/M1 → M3 proceed decision (2026-07-27):** M1 compression gate is treated as **Pass** (hog +
+real-app gate notes). M0 **implementation** (enumerate → group → GF) is done; the formal
+multi-machine labeled corpus remains **ongoing user testing** (partial machine-1 evidence in
+`.superpowers/sdd/m0-corpus-machine1.md`: Brave+Discord 25/25, 0 merges). **M3 tray/panel may
+start** under that caveat — a failed full corpus later still fails the product premise and can
+force grouping fixes before release, but does not block M3 design/build. Live hard-fault/sec
+sampling stays degraded (`assume_faults_when_low`) into M3 unless fixed earlier.
+
 ---
 
 ## 11. Open questions
 
 1. **Backstop defaults** (§4.2) — auto-enable for Chromium-family apps via a bundled profile
    list? Partly answered by the M1 gate outcome.
-2. **Runaway override** (§4.1) — force-arm a group at 3× its cap regardless of notification
-   state? Push-based pressure (§4.1) reshapes this: "regardless of system pressure" now means
-   regardless of the memory-resource notification state, a cleaner condition than a percentage
-   threshold.
+2. ~~**Runaway override** (§4.1)~~ — **Resolved M2:** default 3×, configurable
+   `runaway_multiplier`; force-arm that group while DISARMED when exceeded.
 3. **`explorer.exe`** (§5.2) — advanced disclosure, or never?
 4. **VS Code sub-grouping** (§5.3) — one group, or split editor / ext-host / terminals?
 5. **Battery** (§6.1) — sleep, or just slow the trim rate?

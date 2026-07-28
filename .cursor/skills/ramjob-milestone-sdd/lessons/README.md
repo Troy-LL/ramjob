@@ -7,6 +7,7 @@ Repeatable approach failures captured as skills or structural checks.
 | caller-owned cache | [no-premature-global-cache](no-premature-global-cache/SKILL.md) | Process-global PathCache / OnceLock for one-shot CLI; racy parallel tests |
 | link env | [windows-msvc-sdk-env](windows-msvc-sdk-env/SKILL.md) | Incomplete Windows Kits → LNK1181 kernel32.lib |
 | lock across settle | [trim-lock-covers-settle](trim-lock-covers-settle/SKILL.md) | Released trim_lock before settle; dual ΔGF pipelines; classified no-op trims |
+| single measure owner | [single-measure-owner](single-measure-owner/SKILL.md) | Second §2.3 copy in runtime; stubbed FSM refault/ineffective inputs |
 
 ## How to add
 

@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob M3 — design summary</title>
+  <style>
+    body { margin: 0; font: 14px/1.5 system-ui, "Segoe UI", sans-serif; background: #e8eaed; color: #1a1d21; padding: 24px; }
+    .wrap { max-width: 720px; margin: 0 auto; background: #fff; border-radius: 12px; padding: 20px 24px; border: 1px solid #c9d0d4; }
+    h1 { font-size: 18px; margin: 0 0 6px; }
+    .sub { color: #5c6670; margin: 0 0 16px; font-size: 13px; }
+    h2 { font-size: 14px; margin: 18px 0 8px; border-top: 1px solid #e4e7eb; padding-top: 14px; }
+    ul { margin: 0; padding-left: 18px; font-size: 13px; color: #3d4650; }
+    li { margin: 4px 0; }
+    .ask {
+      margin-top: 18px; padding: 12px; background: #e8f0fe; border: 1px solid #b6c9f0;
+      border-radius: 10px; font-size: 13px; color: #3d5a80;
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>M3 UI design — for approval</h1>
+    <p class="sub">Same content as chat. Reply <strong>approve</strong> to write the design doc.</p>
+
+    <h2>Surface</h2>
+    <ul>
+      <li>Tray popover ~420×600 (not a separate dashboard window)</li>
+      <li>Light system chrome; instrument-cluster gauges</li>
+    </ul>
+
+    <h2>Top row</h2>
+    <ul>
+      <li>Left: system RAM over time (real curve)</li>
+      <li>Right: hero gauge = system RAM now (same metric)</li>
+      <li>Amber dashed ceiling = visual stop-loss (does not arm)</li>
+      <li>Drag ceiling → preview; release → commit + vertical dashed edit tick + stepped ceiling</li>
+    </ul>
+
+    <h2>App grid</h2>
+    <ul>
+      <li>3×2 (scroll if more) per-app gauges</li>
+      <li><strong>Each app has its own Opera-style adjustable limit marker</strong> on its dial — drag to set that group’s cap (same interaction language as the system ceiling)</li>
+      <li>Shows usage vs that app’s cap; marker is per-group, not shared</li>
+    </ul>
+
+    <h2>State colors</h2>
+    <ul>
+      <li>Armed = blue</li>
+      <li>Warning = red (≠ Armed)</li>
+      <li>Arming still follows real arm config (OS / runaway), not the chart ceiling</li>
+    </ul>
+
+    <div class="ask">Reply in chat: <strong>approve</strong> / request changes.</div>
+  </div>
+</body>
+</html>

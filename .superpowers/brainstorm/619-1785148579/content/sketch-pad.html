@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>RamJob — draw what you want</title>
+  <style>
+    :root {
+      --bg: #e8eaed;
+      --panel: #f7f8fa;
+      --ink: #1a1d21;
+      --muted: #5c6670;
+      --accent: #2f6fed;
+      --line: #c9d0d4;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font: 14px/1.4 system-ui, "Segoe UI", sans-serif;
+      color: var(--ink);
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 16px;
+      background: var(--panel);
+      border-bottom: 1px solid var(--line);
+    }
+    header h1 {
+      margin: 0;
+      font-size: 15px;
+      font-weight: 700;
+      margin-right: auto;
+    }
+    header p {
+      margin: 0;
+      width: 100%;
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+    }
+    button, label.tool {
+      appearance: none;
+      border: 1px solid var(--line);
+      background: #fff;
+      color: var(--ink);
+      border-radius: 8px;
+      padding: 7px 12px;
+      font: inherit;
+      cursor: pointer;
+    }
+    button:hover, label.tool:hover { border-color: var(--accent); }
+    button.primary {
+      background: var(--accent);
+      color: #fff;
+      border-color: var(--accent);
+      font-weight: 650;
+    }
+    button.active, label.tool.active {
+      outline: 2px solid var(--accent);
+      outline-offset: 1px;
+    }
+    input[type="color"] {
+      width: 36px;
+      height: 32px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0;
+      background: #fff;
+      cursor: pointer;
+    }
+    input[type="range"] { width: 100px; }
+    main {
+      flex: 1;
+      display: flex;
+      padding: 16px;
+      min-height: 0;
+    }
+    .stage {
+      flex: 1;
+      background: #fff;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.08);
+      overflow: hidden;
+      position: relative;
+      min-height: 70vh;
+    }
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+      cursor: crosshair;
+      touch-action: none;
+    }
+    .hint {
+      position: absolute;
+      left: 16px;
+      bottom: 12px;
+      color: var(--muted);
+      font-size: 12px;
+      pointer-events: none;
+      background: rgba(255,255,255,.85);
+      padding: 4px 8px;
+      border-radius: 6px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Sketch pad — show me the panel you want</h1>
+    <div class="tools">
+      <button type="button" id="pen" class="active">Pen</button>
+      <button type="button" id="eraser">Eraser</button>
+      <label>Color <input type="color" id="color" value="#1a1d21" /></label>
+      <label>Size <input type="range" id="size" min="1" max="24" value="3" /></label>
+      <button type="button" id="clear">Clear</button>
+      <button type="button" id="undo">Undo</button>
+      <button type="button" class="primary" id="save">Download PNG → drop in chat</button>
+    </div>
+    <p>Draw freely (mouse or finger). When done, click <strong>Download PNG</strong>, then attach that file in the Cursor chat so I can see it.</p>
+  </header>
+  <main>
+    <div class="stage">
+      <canvas id="c"></canvas>
+      <div class="hint" id="hint">Light cluster + gauges? Armed blue / Warning red? Scribble the layout…</div>
+    </div>
+  </main>
+  <script>
+    const canvas = document.getElementById("c");
+    const ctx = canvas.getContext("2d");
+    const colorEl = document.getElementById("color");
+    const sizeEl = document.getElementById("size");
+    const hint = document.getElementById("hint");
+
+    let mode = "pen";
+    let drawing = false;
+    let last = null;
+    let strokes = [];
+    let current = null;
+
+    function resize() {
+      const stage = canvas.parentElement;
+      const dpr = window.devicePixelRatio || 1;
+      const w = stage.clientWidth;
+      const h = stage.clientHeight;
+      const snapshot = canvas.width ? ctx.getImageData(0, 0, canvas.width, canvas.height) : null;
+      canvas.width = Math.floor(w * dpr);
+      canvas.height = Math.floor(h * dpr);
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      // light grid
+      ctx.strokeStyle = "#eef1f4";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 32) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 32) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+      redrawAll();
+    }
+
+    function redrawAll() {
+      const w = canvas.clientWidth;
+      const h = canvas.clientHeight;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = "#eef1f4";
+      ctx.lineWidth = 1;
+      for (let x = 0; x < w; x += 32) {
+        ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, h); ctx.stroke();
+      }
+      for (let y = 0; y < h; y += 32) {
+        ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+      }
+      for (const s of strokes) drawStroke(s);
+    }
+
+    function drawStroke(s) {
+      if (!s.points.length) return;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.lineWidth = s.size;
+      ctx.strokeStyle = s.mode === "eraser" ? "#ffffff" : s.color;
+      ctx.globalCompositeOperation = s.mode === "eraser" ? "destination-out" : "source-over";
+      // eraser on white bg: paint white instead of destination-out (simpler with grid)
+      if (s.mode === "eraser") {
+        ctx.globalCompositeOperation = "source-over";
+        ctx.strokeStyle = "#ffffff";
+      }
+      ctx.beginPath();
+      ctx.moveTo(s.points[0].x, s.points[0].y);
+      for (let i = 1; i < s.points.length; i++) {
+        ctx.lineTo(s.points[i].x, s.points[i].y);
+      }
+      ctx.stroke();
+      ctx.globalCompositeOperation = "source-over";
+    }
+
+    function pos(e) {
+      const r = canvas.getBoundingClientRect();
+      const src = e.touches ? e.touches[0] : e;
+      return { x: src.clientX - r.left, y: src.clientY - r.top };
+    }
+
+    function start(e) {
+      e.preventDefault();
+      hint.style.display = "none";
+      drawing = true;
+      last = pos(e);
+      current = {
+        mode,
+        color: colorEl.value,
+        size: Number(sizeEl.value) * (mode === "eraser" ? 3 : 1),
+        points: [last],
+      };
+      strokes.push(current);
+    }
+
+    function move(e) {
+      if (!drawing || !current) return;
+      e.preventDefault();
+      const p = pos(e);
+      current.points.push(p);
+      drawStroke({
+        ...current,
+        points: [last, p],
+      });
+      last = p;
+    }
+
+    function end() {
+      drawing = false;
+      current = null;
+      last = null;
+    }
+
+    canvas.addEventListener("mousedown", start);
+    canvas.addEventListener("mousemove", move);
+    window.addEventListener("mouseup", end);
+    canvas.addEventListener("touchstart", start, { passive: false });
+    canvas.addEventListener("touchmove", move, { passive: false });
+    window.addEventListener("touchend", end);
+
+    document.getElementById("pen").onclick = () => {
+      mode = "pen";
+      document.getElementById("pen").classList.add("active");
+      document.getElementById("eraser").classList.remove("active");
+    };
+    document.getElementById("eraser").onclick = () => {
+      mode = "eraser";
+      document.getElementById("eraser").classList.add("active");
+      document.getElementById("pen").classList.remove("active");
+    };
+    document.getElementById("clear").onclick = () => {
+      strokes = [];
+      redrawAll();
+      hint.style.display = "";
+    };
+    document.getElementById("undo").onclick = () => {
+      strokes.pop();
+      redrawAll();
+    };
+    document.getElementById("save").onclick = () => {
+      const a = document.createElement("a");
+      a.download = "ramjob-sketch-" + Date.now() + ".png";
+      a.href = canvas.toDataURL("image/png");
+      a.click();
+    };
+
+    window.addEventListener("resize", resize);
+    resize();
+  </script>
+</body>
+</html>

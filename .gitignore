@@ -10,3 +10,4 @@
 !.superpowers/sdd/progress.md
 *.pdb
 *.exe
+crates/ramjob-app/gen/
