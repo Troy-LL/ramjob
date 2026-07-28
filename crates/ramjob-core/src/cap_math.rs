@@ -67,6 +67,23 @@ pub fn clamp_cap_with_policy(raw: u64, shift_fine: bool, median_gf_bytes: Option
     apply_cap_floor(snapped, median_gf_bytes)
 }
 
+/// Snap the system-wide stop-loss ceiling (SPEC §8.4's overall ceiling, a
+/// different concept from the per-app cap ladder above): round to the
+/// nearest 1 GB, or nearest 64 MB with `shift_fine`, with no upper bound —
+/// the per-app ladder tops out at 16 GB deliberately, but a machine with more
+/// RAM than that must still be able to set its ceiling above it.
+pub fn snap_ceiling_bytes(raw: u64, shift_fine: bool) -> u64 {
+    if raw == 0 {
+        return 0;
+    }
+    let unit: u64 = if shift_fine {
+        64 * 1024 * 1024
+    } else {
+        1024 * 1024 * 1024
+    };
+    std::cmp::max(unit, ((raw + unit / 2) / unit) * unit)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +111,18 @@ mod tests {
         let median = 8 * 1024 * 1024 * 1024u64;
         let floor = (0.25 * median as f64) as u64;
         assert_eq!(apply_cap_floor(100, Some(median)), floor);
+    }
+
+    #[test]
+    fn ceiling_snap_is_unbounded_above_16gb() {
+        let raw = 32 * 1024 * 1024 * 1024;
+        assert_eq!(snap_ceiling_bytes(raw, false), raw);
+        assert_eq!(snap_ceiling_bytes(0, false), 0);
+        // Fine control rounds to 64 MB, still unbounded.
+        let raw_fine = 20 * 1024 * 1024 * 1024 + 10 * 1024 * 1024;
+        assert_eq!(
+            snap_ceiling_bytes(raw_fine, true),
+            20 * 1024 * 1024 * 1024
+        );
     }
 }

@@ -39,12 +39,11 @@ pub fn set_cap(
     shift_fine: bool,
 ) -> Result<PanelSnapshot, String> {
     let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
-    let median_gf = inner
-        .last_groups
-        .iter()
-        .find(|g| g.key == key)
-        .map(|g| g.gf_bytes);
-    inner.panel.set_cap(&key, cap_bytes, shift_fine, median_gf)?;
+    // SPEC §7.5/§8.2 wants a real 24h median floor input; that histogram is
+    // out of M3 scope, so pass None here to use apply_cap_floor's flat
+    // 300MB (FLOOR_FLAT_BYTES) fallback rather than an instantaneous GF
+    // sample (which a transient spike would wrongly bake in as "the median").
+    inner.panel.set_cap(&key, cap_bytes, shift_fine, None)?;
     let (arm, used, total) = (
         inner.runtime.policy.arm,
         inner.last_used_bytes,

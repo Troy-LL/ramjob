@@ -126,3 +126,17 @@ reads as "light theme" on an actual screen.
   see it visually; no panel-side simulate-armed control exists (only a CLI-only flag in
   ramjob-cli) so Warning/Armed pill colors can't be triggered end-to-end through the tray
   UI as written.
+
+## Known limitations
+
+- **Panel edits don't propagate to an already-running `ramjob run` CLI daemon.**
+  `ramjob-app`'s tick loop (`run_tick`/`spawn_tick_loop` in `crates/ramjob-app/src/main.rs`)
+  only enumerates/enforces while its panel window is visible — while the panel is closed,
+  `ramjob-app` enforces nothing; `ramjob run` (`crates/ramjob-cli/src/run.rs`) is the
+  always-on enforcement daemon in that case. However, `ramjob run` loads `config.toml` once
+  at startup and never reloads it, so cap changes, `pause_all` toggles, or ceiling edits made
+  through the panel do not reach a daemon that was already running before the edit. Today
+  this means either: the user restarts the `ramjob run` process after editing config via the
+  panel, or the user treats `ramjob-app` (panel/tray open) as the sole enforcement path and
+  does not run `ramjob run` concurrently. Live config-reload for the CLI daemon is a real
+  follow-up but is out of scope for this fix round.

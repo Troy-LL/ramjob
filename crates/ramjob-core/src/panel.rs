@@ -69,7 +69,7 @@ impl PanelState {
         now_unix_ms: u64,
         shift_fine: bool,
     ) -> Result<(), String> {
-        let cap = crate::cap_math::snap_cap_bytes(raw, shift_fine);
+        let cap = crate::cap_math::snap_ceiling_bytes(raw, shift_fine);
         self.config.overall_limit_bytes = cap;
         self.history.commit_ceiling(CeilingEdit {
             unix_ms: now_unix_ms,
