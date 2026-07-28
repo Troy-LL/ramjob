@@ -38,6 +38,12 @@ pub struct WinPressure {
     pub assume_faults_when_low: bool,
 }
 
+// SAFETY: `low`/`high` are opaque memory-resource-notification handles used
+// only via `QueryMemoryResourceNotification`; access is externally serialized
+// (e.g. behind a `Mutex`) by every caller, so moving a `WinPressure` across
+// threads (but not touching it from two threads at once) is sound.
+unsafe impl Send for WinPressure {}
+
 impl WinPressure {
     pub fn new() -> Result<Self, String> {
         use windows::Win32::System::Memory::{
