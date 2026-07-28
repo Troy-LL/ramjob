@@ -115,12 +115,12 @@ fn armed_over_cap_trims_once_then_rate_limits() {
             }],
             pause_all: false,
         };
-        let mut rt = Runtime::from_config(cfg);
+        let mut rt = Runtime::new();
         let now = Instant::now();
         let apps = vec![hog];
 
         let out1 = rt
-            .tick_with_groups(SystemArm::Armed, &apps, now)
+            .tick_with_groups(&cfg, SystemArm::Armed, &apps, now)
             .expect("first tick");
         assert!(
             out1.trims_attempted >= 1,
@@ -129,7 +129,7 @@ fn armed_over_cap_trims_once_then_rate_limits() {
         );
 
         let out2 = rt
-            .tick_with_groups(SystemArm::Armed, &apps, now + Duration::from_secs(1))
+            .tick_with_groups(&cfg, SystemArm::Armed, &apps, now + Duration::from_secs(1))
             .expect("second tick");
         assert_eq!(
             out2.trims_attempted, 0,

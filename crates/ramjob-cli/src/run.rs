@@ -84,7 +84,7 @@ pub fn run_daemon(args: RunArgs) {
             std::process::exit(1);
         }
     };
-    let mut rt = Runtime::from_config(cfg);
+    let mut rt = Runtime::new();
     if args.simulate_armed {
         rt.force_arm_for_test();
     }
@@ -117,14 +117,14 @@ pub fn run_daemon(args: RunArgs) {
     loop {
         let now = Instant::now();
         let result = if let Some(w) = win.as_mut() {
-            rt.tick(w, now)
+            rt.tick(&cfg, w, now)
         } else {
             if !args.simulate_armed {
                 sim.low_memory = false;
                 sim.hard_faults_per_sec = 0.0;
                 sim.high_memory = true;
             }
-            rt.tick(&mut sim, now)
+            rt.tick(&cfg, &mut sim, now)
         };
         match result {
             Ok(out) => {

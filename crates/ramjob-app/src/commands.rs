@@ -6,7 +6,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use tauri::{AppHandle, State};
+use tauri::State;
 
 use ramjob_core::panel::PanelSnapshot;
 
@@ -45,7 +45,6 @@ pub fn set_cap(
         .find(|g| g.key == key)
         .map(|g| g.gf_bytes);
     inner.panel.set_cap(&key, cap_bytes, shift_fine, median_gf)?;
-    inner.runtime.config = inner.panel.config.clone();
     let (arm, used, total) = (
         inner.runtime.policy.arm,
         inner.last_used_bytes,
@@ -65,7 +64,6 @@ pub fn set_overall_limit(
     inner
         .panel
         .set_overall_limit(limit_bytes, now_unix_ms(), shift_fine)?;
-    inner.runtime.config = inner.panel.config.clone();
     let (arm, used, total) = (
         inner.runtime.policy.arm,
         inner.last_used_bytes,
@@ -79,7 +77,6 @@ pub fn set_overall_limit(
 pub fn pause_all(state: State<AppState>, pause: bool) -> Result<PanelSnapshot, String> {
     let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_pause_all(pause)?;
-    inner.runtime.config.pause_all = pause;
     let (arm, used, total) = (
         inner.runtime.policy.arm,
         inner.last_used_bytes,
@@ -90,7 +87,7 @@ pub fn pause_all(state: State<AppState>, pause: bool) -> Result<PanelSnapshot, S
 }
 
 #[tauri::command]
-pub fn copy_diagnostics(state: State<AppState>, _app: AppHandle) -> Result<(), String> {
+pub fn copy_diagnostics(state: State<AppState>) -> Result<(), String> {
     let inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
     let text = inner.panel.diagnostics_text(&inner.runtime.diagnostics);
     set_clipboard_text(&text)

@@ -52,7 +52,7 @@ impl AppState {
 
     pub fn at_path(config_path: &Path) -> Result<Self, String> {
         let config = ensure_config(config_path)?;
-        let runtime = Runtime::from_config(config.clone());
+        let runtime = Runtime::new();
         let panel = PanelState {
             config_path: config_path.to_path_buf(),
             config,

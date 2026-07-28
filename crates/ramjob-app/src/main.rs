@@ -112,7 +112,8 @@ fn run_tick(inner: &mut AppStateInner, path_cache: &mut PathCache) {
     };
     let apps = group_processes(&procs);
 
-    let _ = inner.runtime.tick_with_groups(system, &apps, now);
+    let config = inner.panel.config.clone();
+    let _ = inner.runtime.tick_with_groups(&config, system, &apps, now);
 
     if let Ok((total, used)) = system_memory() {
         inner.last_total_bytes = total;
@@ -197,9 +198,7 @@ fn main() {
                         "pause" => {
                             if let Ok(mut inner) = state.0.lock() {
                                 let next = !inner.panel.config.pause_all;
-                                if inner.panel.set_pause_all(next).is_ok() {
-                                    inner.runtime.config.pause_all = next;
-                                }
+                                let _ = inner.panel.set_pause_all(next);
                             }
                         }
                         "open" => {

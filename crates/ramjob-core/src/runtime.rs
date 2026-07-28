@@ -14,8 +14,11 @@ use crate::grouper::AppGroup;
 use crate::policy::{PolicyState, SystemArm};
 use crate::pressure::PressureSource;
 
+/// No `config` field here — the caller owns the single authoritative
+/// `RamjobConfig` (CLI: a local `cfg`; app: `AppStateInner.panel.config`)
+/// and passes it into `tick`/`tick_with_groups` each call, so there is
+/// never a second copy to drift out of sync.
 pub struct Runtime {
-    pub config: RamjobConfig,
     pub policy: PolicyState,
     pub groups: HashMap<String, GroupFsm>,
     pub rates: HashMap<String, Instant>,
@@ -50,9 +53,8 @@ fn apply_post_trim(measurement: &GateMeasurement, cap_bytes: u64) -> PostTrimObs
 }
 
 impl Runtime {
-    pub fn from_config(config: RamjobConfig) -> Self {
+    pub fn new() -> Self {
         Self {
-            config,
             policy: PolicyState::new(),
             groups: HashMap::new(),
             rates: HashMap::new(),
@@ -67,6 +69,7 @@ impl Runtime {
 
     pub fn tick<P: PressureSource>(
         &mut self,
+        config: &RamjobConfig,
         pressure: &mut P,
         now: Instant,
     ) -> Result<TickOutcome, String> {
@@ -79,16 +82,17 @@ impl Runtime {
         let procs = crate::scanner::enumerate_processes_with_cache(&mut self.path_cache)
             .map_err(|s| format!("enumerate: {s:?}"))?;
         let apps = crate::grouper::group_processes(&procs);
-        self.tick_with_groups(system, &apps, now)
+        self.tick_with_groups(config, system, &apps, now)
     }
 
     pub fn tick_with_groups(
         &mut self,
+        config: &RamjobConfig,
         system: SystemArm,
         apps: &[AppGroup],
         now: Instant,
     ) -> Result<TickOutcome, String> {
-        if self.config.pause_all {
+        if config.pause_all {
             self.diagnostics.push("pause_all".to_string());
             return Ok(TickOutcome {
                 system,
@@ -99,9 +103,9 @@ impl Runtime {
         let by_key: HashMap<&str, &AppGroup> =
             apps.iter().map(|g| (g.group_key.as_str(), g)).collect();
         let mut trims_attempted = 0usize;
-        let runaway = self.config.runaway_multiplier;
+        let runaway = config.runaway_multiplier;
 
-        for gc in &self.config.groups {
+        for gc in &config.groups {
             let Some(app) = by_key.get(gc.key.as_str()) else {
                 continue;
             };
@@ -228,29 +232,19 @@ mod tests {
             }],
             pause_all: false,
         };
-        let mut rt = Runtime::from_config(cfg);
+        let mut rt = Runtime::new();
         let now = Instant::now();
         rt.rates.insert("hog".into(), now);
         let apps = vec![app("hog", 500)];
         let out = rt
-            .tick_with_groups(SystemArm::Armed, &apps, now + Duration::from_secs(1))
+            .tick_with_groups(&cfg, SystemArm::Armed, &apps, now + Duration::from_secs(1))
             .unwrap();
         assert_eq!(out.trims_attempted, 0);
     }
 
     #[test]
     fn always_enforce_fsm_wants_soft_trim() {
-        let mut rt = Runtime::from_config(RamjobConfig {
-            version: 2,
-            runaway_multiplier: 3.0,
-            overall_limit_bytes: 0,
-            groups: vec![GroupConfig {
-                key: "hog".into(),
-                cap_bytes: 100,
-                always_enforce: true,
-            }],
-            pause_all: false,
-        });
+        let mut rt = Runtime::new();
         let now = Instant::now();
         let fsm = rt.groups.entry("hog".into()).or_default();
         let action = fsm.step(GroupFsmInput {
