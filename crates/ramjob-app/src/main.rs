@@ -19,7 +19,7 @@ use ramjob_core::panel::PanelGroup;
 use ramjob_core::scanner::{enumerate_processes_with_cache, PathCache};
 use ramjob_core::sys_history::SysSample;
 
-use state::{AppState, AppStateInner};
+use state::AppState;
 
 fn show_panel(window: &tauri::WebviewWindow) {
     let _ = window.show();
@@ -97,22 +97,46 @@ fn build_panel_groups(
         .collect()
 }
 
+/// Build a live tray tooltip from current used/total bytes and Armed/Idle
+/// state — the tray icon is the only visible surface while the panel is
+/// closed, so it should reflect state rather than a static string.
+fn tray_tooltip(used: u64, total: u64, armed: bool) -> String {
+    let used_gb = used as f64 / (1024.0 * 1024.0 * 1024.0);
+    let total_gb = total as f64 / (1024.0 * 1024.0 * 1024.0);
+    let state = if armed { "Armed" } else { "Idle" };
+    format!("RamJob — {used_gb:.1}/{total_gb:.1} GB — {state}")
+}
+
 /// One tick: sample pressure, enumerate processes, run the FSM/enforcer step,
 /// record a system-memory history sample, and refresh the cached snapshot
 /// inputs commands read from.
-fn run_tick(inner: &mut AppStateInner, path_cache: &mut PathCache) {
+///
+/// The state lock is only held for the short pressure-sample/FSM steps —
+/// `enumerate_processes_with_cache`/`group_processes` (which don't touch
+/// shared state) run unlocked in between, so a slow enumeration can't stall
+/// an IPC command (get_snapshot, set_cap, ...) waiting on the same mutex.
+fn run_tick(state: &AppState, path_cache: &mut PathCache, app_handle: &AppHandle) {
     let now = Instant::now();
-    let Ok(sample) = inner.pressure.sample() else {
-        return;
+
+    let (system, config) = {
+        let Ok(mut inner) = state.0.lock() else {
+            return;
+        };
+        let Ok(sample) = inner.pressure.sample() else {
+            return;
+        };
+        let system = inner.runtime.policy.update(sample);
+        (system, inner.panel.config.clone())
     };
-    let system = inner.runtime.policy.update(sample);
 
     let Ok(procs) = enumerate_processes_with_cache(path_cache) else {
         return;
     };
     let apps = group_processes(&procs);
 
-    let config = inner.panel.config.clone();
+    let Ok(mut inner) = state.0.lock() else {
+        return;
+    };
     let _ = inner.runtime.tick_with_groups(&config, system, &apps, now);
 
     if let Ok((total, used)) = system_memory() {
@@ -126,10 +150,28 @@ fn run_tick(inner: &mut AppStateInner, path_cache: &mut PathCache) {
     }
 
     inner.last_groups = build_panel_groups(&apps, &inner.runtime.groups, &inner.panel.config);
+
+    let tooltip = tray_tooltip(
+        inner.last_used_bytes,
+        inner.last_total_bytes,
+        inner.runtime.policy.arm == ramjob_core::policy::SystemArm::Armed,
+    );
+    drop(inner);
+    if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some(&tooltip));
+    }
 }
 
-/// Runs only while the panel window is visible (ponytail: plain background
-/// thread + 1s sleep — no async runtime needed for a single poll loop).
+const TRAY_ID: &str = "main-tray";
+
+/// Runs only while the panel window is visible. Note: this means
+/// `ramjob-app` only enforces caps while its panel/tray process is running
+/// and the window is shown — it does not enforce while closed, and this
+/// process is not a substitute for the `ramjob run` CLI daemon. See
+/// "Known limitations" in .superpowers/sdd/m3-verify.md for the interaction
+/// between panel-driven config edits and an already-running CLI daemon.
+/// (ponytail: plain background thread + 1s sleep — no async runtime needed
+/// for a single poll loop.)
 fn spawn_tick_loop(app_handle: AppHandle) {
     std::thread::spawn(move || {
         let mut path_cache = PathCache::new();
@@ -142,10 +184,7 @@ fn spawn_tick_loop(app_handle: AppHandle) {
                 continue;
             }
             let state = app_handle.state::<AppState>();
-            let Ok(mut inner) = state.0.lock() else {
-                continue;
-            };
-            run_tick(&mut inner, &mut path_cache);
+            run_tick(&state, &mut path_cache, &app_handle);
         }
     });
 }
@@ -188,18 +227,38 @@ fn main() {
                 .cloned()
                 .expect("bundle icon configured in tauri.conf.json");
 
-            TrayIconBuilder::new()
+            let pause_item_for_menu = pause_item.clone();
+            TrayIconBuilder::with_id(TRAY_ID)
                 .icon(icon)
                 .tooltip("RamJob — Idle")
                 .menu(&menu)
                 .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| {
+                .on_menu_event(move |app, event| {
                     let state = app.state::<AppState>();
                     match event.id().as_ref() {
                         "pause" => {
                             if let Ok(mut inner) = state.0.lock() {
                                 let next = !inner.panel.config.pause_all;
-                                let _ = inner.panel.set_pause_all(next);
+                                match inner.panel.set_pause_all(next) {
+                                    Ok(()) => {
+                                        let _ = pause_item_for_menu.set_text(if next {
+                                            "Resume"
+                                        } else {
+                                            "Pause all"
+                                        });
+                                    }
+                                    Err(e) => {
+                                        // Config write failed — leave the tray
+                                        // label as-is (don't flip UI state on a
+                                        // failed persist) and record the error
+                                        // for `copy_diagnostics` instead of
+                                        // silently discarding it.
+                                        inner
+                                            .runtime
+                                            .diagnostics
+                                            .push(format!("set_pause_all failed: {e}"));
+                                    }
+                                }
                             }
                         }
                         "open" => {

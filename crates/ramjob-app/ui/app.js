@@ -81,12 +81,22 @@ function snapCapBytesPreview(raw, shiftFine) {
   );
 }
 
+// Mirrors crates/ramjob-core/src/cap_math.rs snap_ceiling_bytes — the system
+// ceiling is a separate, unbounded concept from the per-app cap ladder above
+// (no 16GB top), so it gets its own preview snap instead of reusing
+// snapCapBytesPreview.
+function snapCeilingBytesPreview(raw, shiftFine) {
+  if (raw <= 0) return 0;
+  const unit = shiftFine ? 64 * 1024 * 1024 : GB;
+  return Math.max(unit, Math.round(raw / unit) * unit);
+}
+
 async function callSetOverallLimit(limitBytes, shiftFine) {
   if (isTauri()) {
     const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
     return invoke("set_overall_limit", { limitBytes, shiftFine });
   }
-  const snapped = snapCapBytesPreview(limitBytes, shiftFine);
+  const snapped = snapCeilingBytesPreview(limitBytes, shiftFine);
   MOCK_SNAPSHOT.overall_limit_bytes = snapped;
   MOCK_SNAPSHOT.ceiling_edits.push({ unix_ms: Date.now(), overall_limit_bytes: snapped });
   return MOCK_SNAPSHOT;
@@ -601,6 +611,16 @@ async function main() {
     renderPauseButton(snapshot);
     renderStatusLine(snapshot);
   });
+
+  // SPEC §8.4: refresh the snapshot on a 1s tick while the panel is open, so
+  // it doesn't stay frozen at startup values until a user interaction forces
+  // a re-render. Skipped while a drag preview is live (ceiling drag or a
+  // per-app cap drag) so a poll-driven re-render can't fight/reset it.
+  setInterval(async () => {
+    if (dragState.active || Object.keys(capDragPreview).length > 0) return;
+    snapshot = await fetchSnapshot();
+    render();
+  }, 1000);
 }
 
 main();
