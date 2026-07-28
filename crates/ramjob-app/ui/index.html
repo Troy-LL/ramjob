@@ -18,6 +18,10 @@
         slower. RamJob will step in automatically when memory gets tight.
       </div>
 
+      <div id="first-run-hint" class="first-run-hint hidden">
+        Set a cap on any app below to get started — RamJob only steps in when memory gets tight.
+      </div>
+
       <section class="top-row">
         <div class="history-chart" id="history-chart">
           <!-- Task 8: system RAM history curve + ceiling + edit ticks -->
@@ -40,6 +44,7 @@
 
       <footer class="panel-footer">
         <button id="show-all-toggle" class="link-btn">Show all apps (<span id="hidden-count">0</span>) ▾</button>
+        <button id="copy-diagnostics-btn" class="link-btn" title="Copy diagnostics to clipboard">Copy diagnostics</button>
         <button id="pause-all-btn" class="pause-btn">Pause all ⏸</button>
       </footer>
     </div>

@@ -103,6 +103,14 @@ async function callSetCap(key, capBytes, shiftFine) {
   return MOCK_SNAPSHOT;
 }
 
+async function callCopyDiagnostics() {
+  if (isTauri()) {
+    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
+    return invoke("copy_diagnostics");
+  }
+  // No clipboard IPC outside Tauri (browser preview) — no-op.
+}
+
 async function callSetFlags(key, alwaysEnforce) {
   if (isTauri()) {
     const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
@@ -361,6 +369,17 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
   }
 }
 
+// SPEC §7.3: no wizard — just a one-line explainer, shown only while the
+// panel is in its true first-run state (nothing capped yet, few apps visible).
+function renderFirstRunHint(snapshot, showAll) {
+  const hint = document.getElementById("first-run-hint");
+  const anyCapped = snapshot.groups.some((g) => g.cap_bytes > 0);
+  const visibleCount = showAll
+    ? snapshot.groups.length
+    : snapshot.groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES).length;
+  hint.classList.toggle("hidden", anyCapped || visibleCount > 5);
+}
+
 function renderStatusLine(snapshot) {
   document.getElementById("status-text").textContent = snapshot.status_line;
 }
@@ -531,6 +550,7 @@ async function main() {
   const render = () => {
     renderPill(snapshot);
     renderStatusLine(snapshot);
+    renderFirstRunHint(snapshot, showAll);
     renderHeroGauge(snapshot);
     renderAppGrid(
       snapshot,
@@ -562,6 +582,18 @@ async function main() {
   document.getElementById("show-all-toggle").addEventListener("click", () => {
     showAll = !showAll;
     render();
+  });
+
+  document.getElementById("copy-diagnostics-btn").addEventListener("click", async () => {
+    const btn = document.getElementById("copy-diagnostics-btn");
+    await callCopyDiagnostics();
+    const original = btn.textContent;
+    btn.textContent = "Copied ✓";
+    btn.classList.add("copied");
+    setTimeout(() => {
+      btn.textContent = original;
+      btn.classList.remove("copied");
+    }, 1500);
   });
 
   document.getElementById("pause-all-btn").addEventListener("click", async () => {

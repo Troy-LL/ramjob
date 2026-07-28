@@ -81,6 +81,21 @@ body {
   display: none;
 }
 
+.first-run-hint {
+  margin: 0 12px 8px;
+  padding: 8px 10px;
+  background: #eef4ff;
+  border: 1px solid #cddcf7;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #2f4d8f;
+}
+
+.first-run-hint.hidden {
+  display: none;
+}
+
 /* Top row: history chart + hero gauge */
 .top-row {
   display: flex;
@@ -247,6 +262,10 @@ body {
   font-size: 12px;
   cursor: pointer;
   padding: 0;
+}
+
+.link-btn.copied {
+  color: #1a7f37;
 }
 
 .pause-btn {
