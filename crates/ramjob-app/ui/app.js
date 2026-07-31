@@ -160,10 +160,9 @@ function renderPill(snapshot) {
 // per-app dial, so an app's marker and fill line up regardless of its cap.
 const DIAL_LADDER_MAX = 16 * GB;
 
-// Per-key live drag preview (cap bytes), so dragging one card's marker never
-// touches IPC until pointer-up commits it. Cleared once the next real
-// snapshot renders that key without an active drag.
-const capDragPreview = {};
+// Per-key live drag preview. Stashes frozen dialMax so unlimited→cap drags
+// don't flip the angular scale mid-gesture (which pinned the marker to 1.0).
+const capDragPreview = {}; // key -> { bytes, dialMax }
 
 function honestMessage(fsmHint, honest) {
   if (honest) return honest;
@@ -246,15 +245,31 @@ function buildArcGauge({ width, height, fillFrac, fillColor, markerFrac, markerC
 
       marker.addEventListener("pointerdown", (ev) => {
         ev.preventDefault();
-        marker.setPointerCapture(ev.pointerId);
-        const onMove = (moveEv) => onDrag(fracFromPointer(moveEv.clientX, moveEv.clientY));
-        const onUp = async (upEv) => {
-          marker.removeEventListener("pointermove", onMove);
-          marker.removeEventListener("pointerup", onUp);
+        const pointerId = ev.pointerId;
+        // Document listeners survive preview DOM updates; also listen for
+        // pointercancel so cancelled gestures don't leak handlers.
+        const onMove = (moveEv) => {
+          if (moveEv.pointerId !== pointerId) return;
+          const frac = fracFromPointer(moveEv.clientX, moveEv.clientY);
+          const p = pointAt(frac);
+          marker.setAttribute("cx", p.x.toFixed(1));
+          marker.setAttribute("cy", p.y.toFixed(1));
+          onDrag(frac);
+        };
+        const teardown = async (upEv) => {
+          if (upEv.pointerId !== pointerId) return;
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", teardown);
+          document.removeEventListener("pointercancel", teardown);
+          if (upEv.type === "pointercancel") {
+            onDrag(markerFrac);
+            return;
+          }
           await onCommit(fracFromPointer(upEv.clientX, upEv.clientY), upEv.shiftKey);
         };
-        marker.addEventListener("pointermove", onMove);
-        marker.addEventListener("pointerup", onUp);
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", teardown);
+        document.addEventListener("pointercancel", teardown);
       });
     }
     svg.appendChild(marker);
@@ -297,10 +312,25 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
   grid.innerHTML = "";
 
   const groups = sortGroups(snapshot.groups);
-  const hidden = groups.filter((g) => g.gf_bytes < MIN_GF_BYTES);
-  document.getElementById("hidden-count").textContent = hidden.length;
-
-  const visible = showAll ? groups : groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES);
+  const aboveFloor = groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES);
+  const anyCapped = groups.some((g) => g.cap_bytes > 0);
+  // SPEC §7.3 first-run: top 5. Default: ≥50MB. Show all: every IPC group.
+  let visible;
+  if (showAll) {
+    visible = groups;
+  } else if (!anyCapped) {
+    visible = aboveFloor.slice(0, 5);
+  } else {
+    visible = aboveFloor;
+  }
+  document.getElementById("hidden-count").textContent = String(
+    Math.max(0, groups.length - visible.length)
+  );
+  const toggle = document.getElementById("show-all-toggle");
+  if (toggle) {
+    const hiddenN = Math.max(0, groups.length - visible.length);
+    toggle.textContent = showAll ? "Show fewer apps ▴" : `Show all apps (${hiddenN}) ▾`;
+  }
 
   for (const g of visible) {
     const card = document.createElement("div");
@@ -322,9 +352,21 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
     gaugeWrap.className = "app-gauge";
     const rect = { width: 176, height: 62 }; // fits the ~193px card minus padding
     const preview = capDragPreview[g.key];
-    const capBytes = preview != null ? preview : g.cap_bytes;
-    const fillFrac = Math.min(1, g.gf_bytes / DIAL_LADDER_MAX);
-    const markerFrac = Math.min(1, (capBytes > 0 ? capBytes : DIAL_LADDER_MAX) / DIAL_LADDER_MAX);
+    const committedCap = g.cap_bytes;
+    // Freeze dialMax for the whole gesture once a preview exists.
+    const dialMax =
+      preview?.dialMax ??
+      (committedCap > 0
+        ? Math.max(committedCap, g.gf_bytes, CAP_SNAP_BYTES[0])
+        : Math.max(snapshot.total_bytes || DIAL_LADDER_MAX, g.gf_bytes, CAP_SNAP_BYTES[0]));
+    const capBytes = preview != null ? preview.bytes : committedCap;
+    const fillFrac = Math.min(1, g.gf_bytes / dialMax);
+    const markerFrac = Math.min(1, (capBytes > 0 ? capBytes : dialMax) / dialMax);
+
+    const meta = document.createElement("div");
+    meta.className = "app-meta";
+    meta.textContent = `${formatBytes(g.gf_bytes)}${g.cap_bytes ? " / cap " + formatBytes(g.cap_bytes) : " / unlimited"}`;
+
     const gaugeSvg = buildArcGauge({
       width: rect.width,
       height: rect.height,
@@ -333,21 +375,17 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
       markerFrac,
       markerColor: "#c8860d",
       onDrag: (frac) => {
-        capDragPreview[g.key] = Math.round(frac * DIAL_LADDER_MAX);
-        renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag);
+        const bytes = Math.round(frac * dialMax);
+        capDragPreview[g.key] = { bytes, dialMax };
+        meta.textContent = `${formatBytes(g.gf_bytes)} / cap ${formatBytes(bytes || 0)}`;
       },
       onCommit: async (frac, shiftFine) => {
         delete capDragPreview[g.key];
-        const capBytes = Math.round(frac * DIAL_LADDER_MAX);
-        await onCommitCap(g.key, capBytes, shiftFine);
+        await onCommitCap(g.key, Math.round(frac * dialMax), shiftFine);
       },
     });
     gaugeWrap.appendChild(gaugeSvg);
     card.appendChild(gaugeWrap);
-
-    const meta = document.createElement("div");
-    meta.className = "app-meta";
-    meta.textContent = `${formatBytes(g.gf_bytes)}${g.cap_bytes ? " / cap " + formatBytes(g.cap_bytes) : " / unlimited"}`;
     card.appendChild(meta);
 
     const honestText = honestMessage(g.fsm_hint, g.honest);
@@ -381,13 +419,16 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
 
 // SPEC §7.3: no wizard — just a one-line explainer, shown only while the
 // panel is in its true first-run state (nothing capped yet, few apps visible).
-function renderFirstRunHint(snapshot, showAll) {
+function renderFirstRunHint(snapshot, _showAll) {
   const hint = document.getElementById("first-run-hint");
   const anyCapped = snapshot.groups.some((g) => g.cap_bytes > 0);
-  const visibleCount = showAll
-    ? snapshot.groups.length
-    : snapshot.groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES).length;
-  hint.classList.toggle("hidden", anyCapped || visibleCount > 5);
+  const totalGb = (snapshot.total_bytes || 0) / GB;
+  hint.textContent =
+    totalGb >= 32
+      ? "Set a cap on any app below to get started — on a high-RAM machine RamJob stays dormant until memory gets tight."
+      : "Set a cap on any app below to get started — RamJob only steps in when memory gets tight.";
+  // SPEC §7.3: one-line explainer while nothing is capped yet.
+  hint.classList.toggle("hidden", anyCapped);
 }
 
 function renderStatusLine(snapshot) {
@@ -519,6 +560,20 @@ function renderHistoryChart(snapshot, onCommitLimit) {
   handle.style.cursor = "ns-resize";
   svg.appendChild(handle);
 
+  // Live preview of the ceiling height while dragging (no full chart rebuild —
+  // rebuilding would detach this SVG and break bytesFromY / pointer handlers).
+  const previewLine = document.createElementNS(SVG_NS, "line");
+  previewLine.setAttribute("x1", String(CHART_PAD));
+  previewLine.setAttribute("x2", String(width - CHART_PAD));
+  previewLine.setAttribute("y1", handleY.toFixed(1));
+  previewLine.setAttribute("y2", handleY.toFixed(1));
+  previewLine.setAttribute("stroke", "#c8860d");
+  previewLine.setAttribute("stroke-width", "1.5");
+  previewLine.setAttribute("stroke-dasharray", "4 3");
+  previewLine.setAttribute("opacity", "0");
+  svg.appendChild(previewLine);
+  svg.appendChild(handle);
+
   const bytesFromY = (clientY) => {
     const box = svg.getBoundingClientRect();
     const scale = height / box.height;
@@ -530,24 +585,37 @@ function renderHistoryChart(snapshot, onCommitLimit) {
 
   handle.addEventListener("pointerdown", (ev) => {
     ev.preventDefault();
-    handle.setPointerCapture(ev.pointerId);
+    const pointerId = ev.pointerId;
     dragState.active = true;
     dragState.previewBytes = snapshot.overall_limit_bytes;
+    previewLine.setAttribute("opacity", "1");
 
     const onMove = (moveEv) => {
+      if (moveEv.pointerId !== pointerId) return;
       dragState.previewBytes = bytesFromY(moveEv.clientY);
-      renderHistoryChart(snapshot, onCommitLimit); // live preview only, no IPC
+      const y = yOf(dragState.previewBytes);
+      handle.setAttribute("cy", y.toFixed(1));
+      previewLine.setAttribute("y1", y.toFixed(1));
+      previewLine.setAttribute("y2", y.toFixed(1));
     };
-    const onUp = async (upEv) => {
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
+    const teardown = async (upEv) => {
+      if (upEv.pointerId !== pointerId) return;
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", teardown);
+      document.removeEventListener("pointercancel", teardown);
       const finalBytes = dragState.previewBytes;
       const shiftFine = upEv.shiftKey;
       dragState.active = false;
-      await onCommitLimit(finalBytes, shiftFine); // commits + refreshes snapshot
+      previewLine.setAttribute("opacity", "0");
+      if (upEv.type === "pointercancel") {
+        renderHistoryChart(snapshot, onCommitLimit);
+        return;
+      }
+      await onCommitLimit(finalBytes, shiftFine);
     };
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", teardown);
+    document.addEventListener("pointercancel", teardown);
   });
 
   container.appendChild(svg);

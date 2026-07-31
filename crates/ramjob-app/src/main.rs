@@ -12,7 +12,7 @@ use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
 
-use ramjob_core::accountant::{group_footprint, meets_gf_floor};
+use ramjob_core::accountant::group_footprint;
 use ramjob_core::fsm::{GroupFsm, GroupPhase};
 use ramjob_core::grouper::{group_processes, AppGroup};
 use ramjob_core::panel::PanelGroup;
@@ -63,28 +63,26 @@ fn basename(key: &str) -> String {
     key.rsplit(['\\', '/']).next().unwrap_or(key).to_string()
 }
 
-/// Build the panel's group list from live enumeration + FSM phases, applying
-/// the same visible-GF floor as the CLI (SPEC §5.2/§6). Caps/always_enforce
-/// come from config when a group has one; groups not yet configured show a
-/// zero cap so the UI can offer to set one.
+/// Build the panel's group list from live enumeration + FSM phases.
+///
+/// Do **not** apply the CLI ≥50 MB GF floor here — the WebView filters that
+/// for the default view and "Show all apps" must still receive sub-floor
+/// groups (SPEC §7.2). Caps/always_enforce come from config when present.
 fn build_panel_groups(
     apps: &[AppGroup],
     fsms: &HashMap<String, GroupFsm>,
     config: &ramjob_core::config::RamjobConfig,
 ) -> Vec<PanelGroup> {
     apps.iter()
-        .filter_map(|app| {
+        .map(|app| {
             let gf = group_footprint(app);
-            if !meets_gf_floor(gf) {
-                return None;
-            }
             let gc = config.groups.iter().find(|g| g.key == app.group_key);
             let fsm_hint = fsms
                 .get(&app.group_key)
                 .map(|f| phase_str(f.phase))
                 .unwrap_or("Idle")
                 .to_string();
-            Some(PanelGroup {
+            PanelGroup {
                 key: app.group_key.clone(),
                 name: basename(&app.group_key),
                 gf_bytes: gf,
@@ -92,7 +90,7 @@ fn build_panel_groups(
                 always_enforce: gc.map(|g| g.always_enforce).unwrap_or(false),
                 fsm_hint,
                 honest: None,
-            })
+            }
         })
         .collect()
 }
@@ -100,10 +98,16 @@ fn build_panel_groups(
 /// Build a live tray tooltip from current used/total bytes and Armed/Idle
 /// state — the tray icon is the only visible surface while the panel is
 /// closed, so it should reflect state rather than a static string.
-fn tray_tooltip(used: u64, total: u64, armed: bool) -> String {
+fn tray_tooltip(used: u64, total: u64, armed: bool, warning: bool) -> String {
     let used_gb = used as f64 / (1024.0 * 1024.0 * 1024.0);
     let total_gb = total as f64 / (1024.0 * 1024.0 * 1024.0);
-    let state = if armed { "Armed" } else { "Idle" };
+    let state = if warning {
+        "Warning"
+    } else if armed {
+        "Armed"
+    } else {
+        "Idle"
+    };
     format!("RamJob — {used_gb:.1}/{total_gb:.1} GB — {state}")
 }
 
@@ -151,10 +155,14 @@ fn run_tick(state: &AppState, path_cache: &mut PathCache, app_handle: &AppHandle
 
     inner.last_groups = build_panel_groups(&apps, &inner.runtime.groups, &inner.panel.config);
 
+    let warning = inner.last_groups.iter().any(|g| {
+        matches!(g.fsm_hint.as_str(), "LowYield" | "Thrashing")
+    });
     let tooltip = tray_tooltip(
         inner.last_used_bytes,
         inner.last_total_bytes,
         inner.runtime.policy.arm == ramjob_core::policy::SystemArm::Armed,
+        warning,
     );
     drop(inner);
     if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {

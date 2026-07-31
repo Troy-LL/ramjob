@@ -40,6 +40,18 @@ pub struct PanelState {
 }
 
 impl PanelState {
+    fn upsert_group(&mut self, key: &str) -> &mut GroupConfig {
+        if let Some(i) = self.config.groups.iter().position(|g| g.key == key) {
+            return &mut self.config.groups[i];
+        }
+        self.config.groups.push(GroupConfig {
+            key: key.to_string(),
+            cap_bytes: 0,
+            always_enforce: false,
+        });
+        self.config.groups.last_mut().expect("just pushed")
+    }
+
     /// Upsert a group's cap by key, snapping + flooring via `cap_math`, then persist.
     pub fn set_cap(
         &mut self,
@@ -49,15 +61,7 @@ impl PanelState {
         median_gf: Option<u64>,
     ) -> Result<(), String> {
         let cap = clamp_cap_with_policy(raw_cap, shift_fine, median_gf);
-        if let Some(g) = self.config.groups.iter_mut().find(|g| g.key == key) {
-            g.cap_bytes = cap;
-        } else {
-            self.config.groups.push(GroupConfig {
-                key: key.to_string(),
-                cap_bytes: cap,
-                always_enforce: false,
-            });
-        }
+        self.upsert_group(key).cap_bytes = cap;
         save_config_atomic(&self.config_path, &self.config)
     }
 
@@ -81,15 +85,7 @@ impl PanelState {
     /// Set a group's `always_enforce` flag (opt-in hard backstop), persisting config.
     /// Creates the group with a zero cap if it doesn't exist yet, same as `set_cap`.
     pub fn set_flags(&mut self, key: &str, always_enforce: bool) -> Result<(), String> {
-        if let Some(g) = self.config.groups.iter_mut().find(|g| g.key == key) {
-            g.always_enforce = always_enforce;
-        } else {
-            self.config.groups.push(GroupConfig {
-                key: key.to_string(),
-                cap_bytes: 0,
-                always_enforce,
-            });
-        }
+        self.upsert_group(key).always_enforce = always_enforce;
         save_config_atomic(&self.config_path, &self.config)
     }
 

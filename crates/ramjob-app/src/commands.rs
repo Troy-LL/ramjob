@@ -11,7 +11,7 @@ use tauri::State;
 use ramjob_core::panel::PanelSnapshot;
 
 use crate::clipboard::set_clipboard_text;
-use crate::state::AppState;
+use crate::state::{AppState, AppStateInner};
 
 fn now_unix_ms() -> u64 {
     SystemTime::now()
@@ -20,15 +20,19 @@ fn now_unix_ms() -> u64 {
         .as_millis() as u64
 }
 
-#[tauri::command]
-pub fn get_snapshot(state: State<AppState>) -> Result<PanelSnapshot, String> {
-    let inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
-    Ok(inner.panel.build_snapshot(
+fn snapshot_from(inner: &AppStateInner) -> PanelSnapshot {
+    inner.panel.build_snapshot(
         inner.runtime.policy.arm,
         inner.last_used_bytes,
         inner.last_total_bytes,
         &inner.last_groups,
-    ))
+    )
+}
+
+#[tauri::command]
+pub fn get_snapshot(state: State<AppState>) -> Result<PanelSnapshot, String> {
+    let inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    Ok(snapshot_from(&inner))
 }
 
 #[tauri::command]
@@ -44,13 +48,7 @@ pub fn set_cap(
     // 300MB (FLOOR_FLAT_BYTES) fallback rather than an instantaneous GF
     // sample (which a transient spike would wrongly bake in as "the median").
     inner.panel.set_cap(&key, cap_bytes, shift_fine, None)?;
-    let (arm, used, total) = (
-        inner.runtime.policy.arm,
-        inner.last_used_bytes,
-        inner.last_total_bytes,
-    );
-    let groups = inner.last_groups.clone();
-    Ok(inner.panel.build_snapshot(arm, used, total, &groups))
+    Ok(snapshot_from(&inner))
 }
 
 #[tauri::command]
@@ -63,13 +61,7 @@ pub fn set_overall_limit(
     inner
         .panel
         .set_overall_limit(limit_bytes, now_unix_ms(), shift_fine)?;
-    let (arm, used, total) = (
-        inner.runtime.policy.arm,
-        inner.last_used_bytes,
-        inner.last_total_bytes,
-    );
-    let groups = inner.last_groups.clone();
-    Ok(inner.panel.build_snapshot(arm, used, total, &groups))
+    Ok(snapshot_from(&inner))
 }
 
 #[tauri::command]
@@ -80,26 +72,14 @@ pub fn set_flags(
 ) -> Result<PanelSnapshot, String> {
     let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_flags(&key, always_enforce)?;
-    let (arm, used, total) = (
-        inner.runtime.policy.arm,
-        inner.last_used_bytes,
-        inner.last_total_bytes,
-    );
-    let groups = inner.last_groups.clone();
-    Ok(inner.panel.build_snapshot(arm, used, total, &groups))
+    Ok(snapshot_from(&inner))
 }
 
 #[tauri::command]
 pub fn pause_all(state: State<AppState>, pause: bool) -> Result<PanelSnapshot, String> {
     let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_pause_all(pause)?;
-    let (arm, used, total) = (
-        inner.runtime.policy.arm,
-        inner.last_used_bytes,
-        inner.last_total_bytes,
-    );
-    let groups = inner.last_groups.clone();
-    Ok(inner.panel.build_snapshot(arm, used, total, &groups))
+    Ok(snapshot_from(&inner))
 }
 
 #[tauri::command]

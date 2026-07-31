@@ -1,15 +1,19 @@
 # Call from repo root before cargo:  . .\scripts\dev-env.ps1
 $env:Path = "$env:USERPROFILE\.cargo\bin;" + $env:Path
 
-$vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
-  -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-  -property installationPath 2>$null
-if ($vs) {
-  $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
-  if (Test-Path $vcvars) {
-    cmd /c "`"$vcvars`" >nul && set" | ForEach-Object {
-      if ($_ -match '^(.*?)=(.*)$') {
-        [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+# Skip vcvars when link.exe already resolves — re-sourcing blows PATH/INCLUDE past cmd limits.
+$linkReady = [bool](Get-Command link.exe -ErrorAction SilentlyContinue)
+if (-not $linkReady) {
+  $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" `
+    -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
+    -property installationPath 2>$null
+  if ($vs) {
+    $vcvars = Join-Path $vs "VC\Auxiliary\Build\vcvars64.bat"
+    if (Test-Path $vcvars) {
+      cmd /c "`"$vcvars`" >nul && set" | ForEach-Object {
+        if ($_ -match '^(.*?)=(.*)$') {
+          [System.Environment]::SetEnvironmentVariable($matches[1], $matches[2], 'Process')
+        }
       }
     }
   }
