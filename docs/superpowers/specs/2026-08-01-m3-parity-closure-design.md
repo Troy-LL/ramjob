@@ -15,7 +15,7 @@ M3 merged on `main`, but councils found the live panel could not match the appro
 - Default grid: top 5 uncapped / ≥50 MB when capped; Show all expands to every group.
 - Dial fill against cap when set, against total RAM when unlimited.
 - Ceiling and per-app drag commit on document-level `pointerup`.
-- Tray tooltip can say Warning; README reflects M3 shipped.
+- Tray tooltip can say Warning; README status is honest about SAC build blockers.
 - Fail signals (SAC, vcvars re-entry) encoded as lessons.
 
 ## Non-goals
@@ -45,4 +45,4 @@ M3 merged on `main`, but councils found the live panel could not match the appro
 
 ## SAC blocker
 
-Smart App Control currently blocks fresh Tauri dependency build scripts (os 4551). Turning SAC off is a one-way security change; the run does not flip it without an explicit product call. Until then, tray binary proof stays **unreachable** on this host; source parity still ships.
+Smart App Control currently blocks fresh Tauri dependency build scripts (os 4551). Turning SAC off is a one-way security change; the run does not flip it without an explicit product call. Until then, tray binary proof stays **unreachable** on this host. Source fixes are committed; they are not proven end-to-end until `cargo build -p ramjob-app` succeeds and a human drives the panel.

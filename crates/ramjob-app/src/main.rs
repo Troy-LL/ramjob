@@ -172,14 +172,9 @@ fn run_tick(state: &AppState, path_cache: &mut PathCache, app_handle: &AppHandle
 
 const TRAY_ID: &str = "main-tray";
 
-/// Runs only while the panel window is visible. Note: this means
-/// `ramjob-app` only enforces caps while its panel/tray process is running
-/// and the window is shown — it does not enforce while closed, and this
-/// process is not a substitute for the `ramjob run` CLI daemon. See
-/// "Known limitations" in .superpowers/sdd/m3-verify.md for the interaction
-/// between panel-driven config edits and an already-running CLI daemon.
-/// (ponytail: plain background thread + 1s sleep — no async runtime needed
-/// for a single poll loop.)
+/// Background loop: full enumerate/FSM tick while the panel is open; when
+/// closed, still refresh the tray tooltip from a cheap memory sample so the
+/// icon is not frozen at the last open-panel reading (L3 grill).
 fn spawn_tick_loop(app_handle: AppHandle) {
     std::thread::spawn(move || {
         let mut path_cache = PathCache::new();
@@ -188,13 +183,39 @@ fn spawn_tick_loop(app_handle: AppHandle) {
             let Some(window) = app_handle.get_webview_window("main") else {
                 continue;
             };
-            if !window.is_visible().unwrap_or(false) {
-                continue;
-            }
             let state = app_handle.state::<AppState>();
-            run_tick(&state, &mut path_cache, &app_handle);
+            if window.is_visible().unwrap_or(false) {
+                run_tick(&state, &mut path_cache, &app_handle);
+            } else {
+                refresh_tray_tooltip(&state, &app_handle);
+            }
         }
     });
+}
+
+fn refresh_tray_tooltip(state: &AppState, app_handle: &AppHandle) {
+    let Ok((total, used)) = system_memory() else {
+        return;
+    };
+    let Ok(mut inner) = state.0.lock() else {
+        return;
+    };
+    inner.last_total_bytes = total;
+    inner.last_used_bytes = used;
+    let warning = inner
+        .last_groups
+        .iter()
+        .any(|g| matches!(g.fsm_hint.as_str(), "LowYield" | "Thrashing"));
+    let tooltip = tray_tooltip(
+        used,
+        total,
+        inner.runtime.policy.arm == ramjob_core::policy::SystemArm::Armed,
+        warning,
+    );
+    drop(inner);
+    if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {
+        let _ = tray.set_tooltip(Some(&tooltip));
+    }
 }
 
 fn main() {

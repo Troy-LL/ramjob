@@ -2,7 +2,7 @@
 
 Windows tray utility that caps application memory by install-root group (Opera GX–style limiter, generalized).
 
-**Status:** M0–M2 ship as the Rust CLI (`list` / `gate` / `run`). M3 tray + instrument panel ships as `ramjob-app` (Tauri). M4+ (Job Object hard backstop, etc.) not started.
+**Status:** M0–M2 ship as the Rust CLI (`list` / `gate` / `run`). M3 tray + instrument panel lives in `ramjob-app` (Tauri); source is on `main`, but a live tray build on this host still needs Smart App Control to allow unsigned cargo build scripts. M4+ (Job Object hard backstop, etc.) not started.
 
 ## Requirements
 
