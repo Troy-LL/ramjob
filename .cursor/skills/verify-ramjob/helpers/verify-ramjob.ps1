@@ -149,9 +149,16 @@ exit `$LASTEXITCODE
     $hog = Get-HogExe
     if (-not $ramjob -or -not $hog) { throw "ramjob or ramjob-hog missing after build" }
 
-    $hogLog = Join-Path $script:Scratch "hog.log"
-    $hogProc = Start-Process -FilePath $hog -ArgumentList @("--mode", "forget", "--mb", "$Mb", "--hold-secs", "$HoldSecs") `
-      -RedirectStandardOutput $hogLog -RedirectStandardError $hogLog -PassThru -WindowStyle Hidden
+    $hogLogOut = Join-Path $script:Scratch "hog.out.log"
+    $hogLogErr = Join-Path $script:Scratch "hog.err.log"
+    try {
+      $hogProc = Start-Process -FilePath $hog -ArgumentList @("--mode", "forget", "--mb", "$Mb", "--hold-secs", "$HoldSecs") `
+        -RedirectStandardOutput $hogLogOut -RedirectStandardError $hogLogErr -PassThru -WindowStyle Hidden
+    } catch {
+      Write-Host "gate blocked: cannot start ramjob-hog ($($_.Exception.Message))"
+      Write-Host "hint: Smart App Control may block freshly built unsigned hog.exe; use gate --image <live> or turn SAC Off"
+      exit 1
+    }
     Append-Pid $hogProc.Id
     Start-Sleep -Seconds 1
 

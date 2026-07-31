@@ -47,19 +47,20 @@ const MOCK_SNAPSHOT = {
 
 const isTauri = () => typeof window !== "undefined" && !!window.__TAURI__;
 
+async function ipc(cmd, args) {
+  if (!isTauri()) return null;
+  const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
+  return args === undefined ? invoke(cmd) : invoke(cmd, args);
+}
+
 async function fetchSnapshot() {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("get_snapshot");
-  }
-  return MOCK_SNAPSHOT;
+  const live = await ipc("get_snapshot");
+  return live ?? MOCK_SNAPSHOT;
 }
 
 async function callPauseAll(pause) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("pause_all", { pause });
-  }
+  const live = await ipc("pause_all", { pause });
+  if (live) return live;
   MOCK_SNAPSHOT.pause_all = pause;
   return MOCK_SNAPSHOT;
 }
@@ -92,10 +93,8 @@ function snapCeilingBytesPreview(raw, shiftFine) {
 }
 
 async function callSetOverallLimit(limitBytes, shiftFine) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("set_overall_limit", { limitBytes, shiftFine });
-  }
+  const live = await ipc("set_overall_limit", { limitBytes, shiftFine });
+  if (live) return live;
   const snapped = snapCeilingBytesPreview(limitBytes, shiftFine);
   MOCK_SNAPSHOT.overall_limit_bytes = snapped;
   MOCK_SNAPSHOT.ceiling_edits.push({ unix_ms: Date.now(), overall_limit_bytes: snapped });
@@ -103,10 +102,8 @@ async function callSetOverallLimit(limitBytes, shiftFine) {
 }
 
 async function callSetCap(key, capBytes, shiftFine) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("set_cap", { key, capBytes, shiftFine });
-  }
+  const live = await ipc("set_cap", { key, capBytes, shiftFine });
+  if (live) return live;
   const snapped = snapCapBytesPreview(capBytes, shiftFine);
   const g = MOCK_SNAPSHOT.groups.find((g) => g.key === key);
   if (g) g.cap_bytes = snapped;
@@ -114,18 +111,12 @@ async function callSetCap(key, capBytes, shiftFine) {
 }
 
 async function callCopyDiagnostics() {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("copy_diagnostics");
-  }
-  // No clipboard IPC outside Tauri (browser preview) — no-op.
+  await ipc("copy_diagnostics");
 }
 
 async function callSetFlags(key, alwaysEnforce) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("set_flags", { key, alwaysEnforce });
-  }
+  const live = await ipc("set_flags", { key, alwaysEnforce });
+  if (live) return live;
   const g = MOCK_SNAPSHOT.groups.find((g) => g.key === key);
   if (g) g.always_enforce = alwaysEnforce;
   return MOCK_SNAPSHOT;
@@ -164,8 +155,11 @@ const DIAL_LADDER_MAX = 16 * GB;
 // don't flip the angular scale mid-gesture (which pinned the marker to 1.0).
 const capDragPreview = {}; // key -> { bytes, dialMax }
 
-function honestMessage(fsmHint, honest) {
+function honestMessage(fsmHint, honest, group) {
   if (honest) return honest;
+  if (group && group.cap_bytes > 0 && group.gf_bytes > group.cap_bytes) {
+    return `${group.name} is using ${formatBytes(group.gf_bytes)}. Capping at ${formatBytes(group.cap_bytes)} will push memory out of RAM and may make it feel slower.`;
+  }
   if (fsmHint === "LowYield") {
     return "Capping this isn't freeing much — Windows is compressing the memory rather than releasing it. Raising the cap won't cost you much.";
   }
@@ -388,7 +382,7 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
     card.appendChild(gaugeWrap);
     card.appendChild(meta);
 
-    const honestText = honestMessage(g.fsm_hint, g.honest);
+    const honestText = honestMessage(g.fsm_hint, g.honest, g);
     if (honestText) {
       const warn = document.createElement("div");
       warn.className = "app-honest";
