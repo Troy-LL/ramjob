@@ -59,6 +59,7 @@ fn wait_for_hog_group(pid: u32) -> AppGroup {
                     pid: p.pid,
                     create_time: p.create_time,
                     private_working_set_bytes: p.private_working_set_bytes,
+                    private_usage_bytes: p.private_usage_bytes,
                 }],
             })
         });

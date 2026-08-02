@@ -169,6 +169,7 @@ pub fn refresh_group_from_procs(group: &AppGroup, procs: &[ProcessRecord]) -> Ap
                 pid: p.pid,
                 create_time: p.create_time,
                 private_working_set_bytes: p.private_working_set_bytes,
+                private_usage_bytes: p.private_usage_bytes,
             })
         })
         .collect();
@@ -353,6 +354,7 @@ mod tests {
             pid,
             create_time: ctime,
             private_working_set_bytes: ws,
+            private_usage_bytes: ws,
         }
     }
 
@@ -370,6 +372,7 @@ mod tests {
             session_id: 1,
             image_name: image.into(),
             private_working_set_bytes: private_ws,
+            private_usage_bytes: private_ws,
             working_set_bytes: private_ws,
             create_time: ctime,
             image_path: None,

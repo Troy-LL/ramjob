@@ -288,6 +288,7 @@ mod tests {
             pid,
             create_time: ctime,
             private_working_set_bytes: ws,
+            private_usage_bytes: ws,
         }
     }
 

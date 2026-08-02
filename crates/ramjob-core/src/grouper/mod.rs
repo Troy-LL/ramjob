@@ -19,6 +19,8 @@ pub struct GroupMember {
     /// FILETIME ticks; pairs with `pid` for trim ΔGF intersection.
     pub create_time: i64,
     pub private_working_set_bytes: u64,
+    /// Commit charge (`Σ PrivateUsage` per member); from SPI `PagefileUsage`.
+    pub private_usage_bytes: u64,
 }
 
 /// One visible application group after install-root / fallback resolution.
@@ -102,6 +104,7 @@ pub fn group_processes_with_context(procs: &[ProcessRecord], ctx: &GroupContext)
             pid: proc.pid,
             create_time: proc.create_time,
             private_working_set_bytes: proc.private_working_set_bytes,
+            private_usage_bytes: proc.private_usage_bytes,
         });
     }
 
@@ -136,6 +139,7 @@ mod tests {
             session_id,
             image_name: image_name.to_string(),
             private_working_set_bytes: 0,
+            private_usage_bytes: 0,
             working_set_bytes: 0,
             create_time: 1,
             image_path: path.map(PathBuf::from),

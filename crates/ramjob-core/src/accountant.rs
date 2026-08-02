@@ -17,6 +17,15 @@ pub fn unique_shared_ws(_group: &AppGroup) -> u64 {
     0
 }
 
+/// Group commit charge: `Σ PrivateUsage` across members (SPEC §3.2).
+pub fn group_commit_charge(group: &AppGroup) -> u64 {
+    group
+        .members
+        .iter()
+        .map(|m| m.private_usage_bytes)
+        .sum()
+}
+
 /// Group Footprint in bytes: private WS sum + [`unique_shared_ws`].
 pub fn group_footprint(group: &AppGroup) -> u64 {
     let private: u64 = group
@@ -46,6 +55,7 @@ mod tests {
                     pid,
                     create_time: 1,
                     private_working_set_bytes,
+                    private_usage_bytes: private_working_set_bytes,
                 })
                 .collect(),
         }

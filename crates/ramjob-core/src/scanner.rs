@@ -22,6 +22,8 @@ pub struct ProcessRecord {
     pub session_id: u32,
     pub image_name: String,
     pub private_working_set_bytes: u64,
+    /// Commit charge (`PROCESS_MEMORY_COUNTERS_EX::PrivateUsage`); SPI `PagefileUsage`.
+    pub private_usage_bytes: u64,
     /// Total working set (SPI `WorkingSetSize`), used for CompressStore.
     pub working_set_bytes: u64,
     /// FILETIME ticks (100ns since 1601-01-01 UTC).
@@ -68,6 +70,7 @@ pub fn enumerate_processes_with_cache(
                 session_id: entry.session_id,
                 image_name,
                 private_working_set_bytes: entry.working_set_private_size.max(0) as u64,
+                private_usage_bytes: entry.pagefile_usage as u64,
                 working_set_bytes: entry.working_set_size as u64,
                 create_time,
                 image_path,

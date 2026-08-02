@@ -19,9 +19,9 @@ Verify: doctor ok; `cargo test --workspace` green; `ramjob-app` builds.
 | Task | Status | Commit |
 |---|---|---|
 | 1 commit_ratio math | done | `ada36db` |
-| 2 job_backstop store | done | `006f578` |
-| 3 FSM Backstop action | pending | |
-| 4 Runtime wire-up | pending | |
+| 2 job_backstop store | done | `9115f64` |
+| 3 FSM Backstop action | done | `9d939bd` |
+| 4 Runtime wire-up | done | `a199c1b` |
 | 5 Hog integration verify | pending | |
 | 6 Panel warning + SPEC | pending | |
 | 7 Thermo + lessons | pending | |

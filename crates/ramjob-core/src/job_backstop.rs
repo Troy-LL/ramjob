@@ -131,6 +131,20 @@ impl JobBackstopStore {
         Ok(())
     }
 
+    /// True when any group has a finite `JobMemoryLimit` set.
+    pub fn any_limited(&self) -> bool {
+        self.groups.values().any(|g| g.memory_limit.is_some())
+    }
+
+    /// Raise limits to unlimited for every known group (DISARM path).
+    pub fn clear_all_limits(&mut self) -> Result<(), BackstopError> {
+        let keys: Vec<String> = self.groups.keys().cloned().collect();
+        for key in keys {
+            self.clear_limit(&key)?;
+        }
+        Ok(())
+    }
+
     /// Raise limit to unlimited for `group` (job handle kept for reuse).
     pub fn clear_limit(&mut self, group: &str) -> Result<(), BackstopError> {
         let Some(job) = self.groups.get_mut(group) else {
