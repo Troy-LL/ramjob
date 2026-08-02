@@ -29,7 +29,7 @@ pub enum DiscoveryMode {
 }
 
 /// Event-driven process discovery (ETW / WMI / sweep backends).
-pub trait DiscoverySource {
+pub trait DiscoverySource: Send {
     fn poll_events(&mut self) -> Vec<DiscoveryEvent>;
 }
 
