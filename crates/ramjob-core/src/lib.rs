@@ -13,6 +13,8 @@ pub mod fsm;
 pub mod gate;
 pub mod grouper;
 pub mod panel;
+pub mod power;
+pub mod chromium_family;
 pub mod preflight;
 pub mod policy;
 pub mod pressure;

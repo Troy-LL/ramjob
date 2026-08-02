@@ -29,6 +29,21 @@ function Ensure-DevEnv {
   }
 }
 
+# cargo writes progress to stderr; with $ErrorActionPreference Stop that becomes terminating.
+function Invoke-CargoBuild {
+  param([Parameter(ValueFromRemainingArguments = $true)][string[]]$CargoArgs)
+  $prev = $ErrorActionPreference
+  $ErrorActionPreference = "Continue"
+  try {
+    & cargo @CargoArgs 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) {
+      throw "cargo $($CargoArgs -join ' ') failed exit=$LASTEXITCODE"
+    }
+  } finally {
+    $ErrorActionPreference = $prev
+  }
+}
+
 function Get-RamjobExe {
   $candidates = @(
     (Join-Path $env:CARGO_TARGET_DIR "debug\ramjob.exe"),
@@ -77,6 +92,30 @@ $Extra
 "@ | Set-Content -Path (Join-Path $EvidenceDir "meta.txt") -Encoding utf8
 }
 
+# Quote argv for Start-Process (paths with spaces break unquoted ArgumentList arrays).
+# Do not name a parameter `$Args` — that shadows PowerShell's automatic variable.
+function Format-ProcessArguments([string[]]$Argv) {
+  ($Argv | ForEach-Object {
+    if ($_ -match '[\s"]') { '"{0}"' -f ($_ -replace '"', '\"') } else { $_ }
+  }) -join ' '
+}
+
+function Invoke-CapturedProcess {
+  param(
+    [string]$FilePath,
+    [string[]]$Argv,
+    [string]$StdoutPath,
+    [string]$StderrPath
+  )
+  $argLine = Format-ProcessArguments -Argv $Argv
+  if ([string]::IsNullOrWhiteSpace($argLine)) {
+    throw "Invoke-CapturedProcess: empty argument line for $FilePath"
+  }
+  $p = Start-Process -FilePath $FilePath -ArgumentList $argLine -Wait -PassThru `
+    -RedirectStandardOutput $StdoutPath -RedirectStandardError $StderrPath -NoNewWindow
+  return $p
+}
+
 switch ($Command) {
   "doctor" {
     Ensure-DevEnv
@@ -85,7 +124,7 @@ switch ($Command) {
     $ramjob = Get-RamjobExe
     if (-not $ramjob) {
       Write-Host "building ramjob-cli…"
-      cargo build -p ramjob-cli | Out-Host
+      Invoke-CargoBuild -CargoArgs @("build", "-p", "ramjob-cli")
       $ramjob = Get-RamjobExe
     }
     $ok = $true
@@ -107,7 +146,7 @@ switch ($Command) {
   "list" {
     Ensure-DevEnv
     Ensure-EvidenceDir
-    cargo build -p ramjob-cli | Out-Host
+    Invoke-CargoBuild -CargoArgs @("build", "-p", "ramjob-cli")
     $ramjob = Get-RamjobExe
     if (-not $ramjob) { throw "ramjob.exe not found after build" }
     $outFile = Join-Path $EvidenceDir "list.stdout.txt"
@@ -144,7 +183,7 @@ exit `$LASTEXITCODE
   "gate" {
     Ensure-DevEnv
     Ensure-EvidenceDir
-    cargo build -p ramjob-cli -p ramjob-hog | Out-Host
+    Invoke-CargoBuild -CargoArgs @("build", "-p", "ramjob-cli", "-p", "ramjob-hog")
     $ramjob = Get-RamjobExe
     $hog = Get-HogExe
     if (-not $ramjob -or -not $hog) { throw "ramjob or ramjob-hog missing after build" }
@@ -165,10 +204,9 @@ exit `$LASTEXITCODE
     $gateOut = Join-Path $EvidenceDir "gate-out.md"
     $stdout = Join-Path $EvidenceDir "gate.stdout.txt"
     $stderr = Join-Path $EvidenceDir "gate.stderr.txt"
-    $args = @("gate", "--image", "ramjob-hog", "--out", $gateOut, "--wait-secs", "15")
-    $p = Start-Process -FilePath $ramjob -ArgumentList $args -Wait -PassThru `
-      -RedirectStandardOutput $stdout -RedirectStandardError $stderr -NoNewWindow
-    Write-Meta -FeatureId "gate-ry" -Extra "command=$ramjob $($args -join ' ')`nexit=$($p.ExitCode)`nhog_pid=$($hogProc.Id)"
+    $gateArgs = @("gate", "--image", "ramjob-hog", "--out", $gateOut, "--wait-secs", "15")
+    $p = Invoke-CapturedProcess -FilePath $ramjob -Argv $gateArgs -StdoutPath $stdout -StderrPath $stderr
+    Write-Meta -FeatureId "gate-ry" -Extra "command=$ramjob $($gateArgs -join ' ')`nexit=$($p.ExitCode)`nhog_pid=$($hogProc.Id)"
 
     if (-not $hogProc.HasExited) {
       Stop-Process -Id $hogProc.Id -Force -ErrorAction SilentlyContinue
@@ -196,7 +234,7 @@ exit `$LASTEXITCODE
   "run-once" {
     Ensure-DevEnv
     Ensure-EvidenceDir
-    cargo build -p ramjob-cli | Out-Host
+    Invoke-CargoBuild -CargoArgs @("build", "-p", "ramjob-cli")
     $ramjob = Get-RamjobExe
     if (-not $ramjob) { throw "ramjob.exe not found" }
     $cfg = Join-Path $EvidenceDir "config.verify.toml"
@@ -206,10 +244,9 @@ runaway_multiplier = 3.0
 "@ | Set-Content -Path $cfg -Encoding utf8
     $stdout = Join-Path $EvidenceDir "run.stdout.txt"
     $stderr = Join-Path $EvidenceDir "run.stderr.txt"
-    $args = @("run", "--once", "--simulate-armed", "--config", $cfg)
-    $p = Start-Process -FilePath $ramjob -ArgumentList $args -Wait -PassThru `
-      -RedirectStandardOutput $stdout -RedirectStandardError $stderr -NoNewWindow
-    Write-Meta -FeatureId "run-once" -Extra "command=$ramjob $($args -join ' ')`nexit=$($p.ExitCode)"
+    $runArgs = @("run", "--once", "--simulate-armed", "--config", $cfg)
+    $p = Invoke-CapturedProcess -FilePath $ramjob -Argv $runArgs -StdoutPath $stdout -StderrPath $stderr
+    Write-Meta -FeatureId "run-once" -Extra "command=$ramjob $($runArgs -join ' ')`nexit=$($p.ExitCode)"
     if ($p.ExitCode -ne 0) {
       Write-Host "run-once failed exit=$($p.ExitCode)"
       Get-Content $stderr -ErrorAction SilentlyContinue | Write-Host

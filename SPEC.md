@@ -267,10 +267,13 @@ in a 60 s window
 
 Backstop is **opt-in per app**, default off, with an explicit warning (§7.4).
 
-**Auto-enable Chromium-family backstop (deferred M4 → post-M4):** M4 ships **opt-in only**
-(`always_enforce` / panel ⚙) with §7.4 warning. A bundled “known-good OOM” profile list that
-flips the default for Chromium-family apps remains an open product call — do not silent-enable
-in M4. Design: [`docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`](docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md).
+**Auto-enable Chromium-family backstop (resolved 2026-08-03):** Soft trim remains default for
+all apps. When the user **sets a per-app cap** on a Chromium-family group (bundled path/exe
+match: Chrome, Chromium, Edge, Brave, Opera, Vivaldi, and similar), `always_enforce` defaults
+**on** for that group (Job Object backstop). The user may turn it off via ⚙. Silent enable with
+no cap interaction is not done. Design:
+[`docs/superpowers/specs/2026-08-03-postship-opens-design.md`](docs/superpowers/specs/2026-08-03-postship-opens-design.md).
+M4 history: [`docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`](docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md).
 
 ---
 
@@ -386,8 +389,10 @@ wakeups with others. Materially improves the battery answer.
 **Never** `OpenProcess` in a hot loop. Handles for tracked groups are opened once and retained,
 validated by PID+creation-time on reuse.
 
-`[OPEN]` On battery: sleep the engine, or cap harder? Arguments both ways. Leaning: respect
-pressure gating identically, but raise the trim rate limit to reduce disk writes.
+**On battery (resolved 2026-08-03):** Respect pressure gating identically; do **not** sleep the
+engine (always-on cadence). Raise the soft-trim rate limit from 20 s to **60 s** while on
+battery (`GetSystemPowerStatus`) to cut disk writes. Design:
+[`docs/superpowers/specs/2026-08-03-postship-opens-design.md`](docs/superpowers/specs/2026-08-03-postship-opens-design.md).
 
 ---
 
@@ -687,16 +692,19 @@ distribution, and code-signing OPENs remain deferred.
 
 ## 11. Open questions
 
-1. **Backstop defaults** (§4.2) — auto-enable for Chromium-family apps via a bundled profile
-   list? Partly answered by the M1 gate outcome.
+1. ~~**Backstop defaults** (§4.2)~~ — **Resolved 2026-08-03:** Chromium-family cap →
+   `always_enforce` defaults on; user can disable. See §4.2.
 2. ~~**Runaway override** (§4.1)~~ — **Resolved M2:** default 3×, configurable
    `runaway_multiplier`; force-arm that group while DISARMED when exceeded.
-3. **`explorer.exe`** (§5.2) — advanced disclosure, or never?
-4. **VS Code sub-grouping** (§5.3) — one group, or split editor / ext-host / terminals?
-5. **Battery** (§6.1) — sleep, or just slow the trim rate?
-6. **Distribution** — MSIX, plain installer, or portable exe? Affects autostart and updates.
+3. ~~**`explorer.exe`** (§5.2)~~ — **Resolved 2026-08-03:** never manage (denylist).
+4. ~~**VS Code sub-grouping** (§5.3)~~ — **Resolved 2026-08-03:** one group (no split).
+5. ~~**Battery** (§6.1)~~ — **Resolved 2026-08-03:** raise trim rate limit to 60 s on battery;
+   do not sleep the engine.
+6. ~~**Distribution**~~ — **Resolved 2026-08-03:** portable `ramjob-app.exe` + HKCU Run; no
+   MSI/MSIX in-tree.
 7. **Code signing** — unsigned binaries that open handles into other processes and assign job
-   objects will be eaten alive by SmartScreen and AV heuristics. Budget for an EV cert?
+   objects will be eaten alive by SmartScreen and AV heuristics. **Human-gated:** purchase
+   EV/OV cert; use `scripts/sign-release.ps1` when available. Not automatable in-repo.
 
 *Resolved in 0.2:* games excluded by default (was 4); no "RAM saved" metric (was 6).
 *Resolved in 0.3:* single `Ry` split; Available%-based arm/disarm replaced; group-identity and

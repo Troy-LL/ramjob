@@ -7,8 +7,9 @@ use crate::accountant::group_footprint;
 use crate::config::RamjobConfig;
 use crate::diagnostics::DiagnosticsRing;
 use crate::enforcer::{
-    ExclusionPolicy, LiveTrimHooks, TRIM_RATE_LIMIT, TrimContext,
+    ExclusionPolicy, LiveTrimHooks, TrimContext,
 };
+use crate::power::{trim_rate_limit, LivePowerSource, PowerSource};
 use crate::adaptive::hottest_phase;
 use crate::discovery::{DiscoveryEvent, DiscoveryMode, DiscoverySource, InertDiscovery, select_discovery};
 use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput, GroupPhase};
@@ -33,6 +34,8 @@ pub struct Runtime {
     pub(crate) commit_ratios: HashMap<String, crate::commit_ratio::CommitRatio>,
     pub(crate) backstop: JobBackstopStore,
     pub(crate) last_caps: HashMap<String, u64>,
+    #[cfg(test)]
+    pub(crate) battery_override: Option<bool>,
 }
 
 pub struct TickOutcome {
@@ -90,6 +93,8 @@ impl Runtime {
             commit_ratios: HashMap::new(),
             backstop: JobBackstopStore::new(),
             last_caps: HashMap::new(),
+            #[cfg(test)]
+            battery_override: None,
         }
     }
 
@@ -180,6 +185,14 @@ impl Runtime {
         self.tick_with_groups(config, system, &apps, now)
     }
 
+    fn on_battery_for_tick(&self) -> bool {
+        #[cfg(test)]
+        if let Some(on_battery) = self.battery_override {
+            return on_battery;
+        }
+        LivePowerSource.on_battery()
+    }
+
     pub fn tick_with_groups(
         &mut self,
         config: &RamjobConfig,
@@ -197,6 +210,9 @@ impl Runtime {
         }
 
         self.clear_backstop_on_disarm(system);
+
+        let on_battery = self.on_battery_for_tick();
+        let trim_rate_limit = trim_rate_limit(on_battery);
 
         let by_key: HashMap<&str, &AppGroup> =
             apps.iter().map(|g| (g.group_key.as_str(), g)).collect();
@@ -235,14 +251,14 @@ impl Runtime {
                     let rate_limited = self
                         .rates
                         .get(&gc.key)
-                        .is_some_and(|last| now.duration_since(*last) < TRIM_RATE_LIMIT);
+                        .is_some_and(|last| now.duration_since(*last) < trim_rate_limit);
                     if rate_limited {
                         self.diagnostics.push(format!(
                             "{} SoftTrim skipped: group rate-limited (no trim)",
                             gc.key
                         ));
                     } else {
-                        match measured_soft_trim(app, &mut self.rates, now) {
+                        match measured_soft_trim(app, &mut self.rates, now, trim_rate_limit) {
                             Ok(measurement) => {
                                 trims_attempted += 1;
                                 self.rates.insert(gc.key.clone(), now);
@@ -328,6 +344,7 @@ fn measured_soft_trim(
     group: &AppGroup,
     rate_limits: &mut HashMap<String, Instant>,
     now: Instant,
+    rate_limit: std::time::Duration,
 ) -> Result<GateMeasurement, String> {
     #[cfg(test)]
     if let Some(stub) = test_support::take_trim_measurement_stub() {
@@ -340,6 +357,7 @@ fn measured_soft_trim(
         rate_limits,
         now,
         exclusion: ExclusionPolicy::ProtectInteractive,
+        rate_limit,
     };
     run_gate_on_group(group, &mut ctx, GATE_SETTLE)
 }
@@ -450,6 +468,48 @@ mod tests {
         };
         rt.tick(&cfg, &mut pressure, Instant::now()).unwrap();
         assert!(!rt.path_cache_contains(42, 100));
+    }
+
+    #[test]
+    fn battery_rate_limit_skips_trim_within_60s() {
+        use crate::enforcer::TRIM_RATE_LIMIT;
+
+        let cfg = RamjobConfig {
+            version: 2,
+            runaway_multiplier: 3.0,
+            overall_limit_bytes: 0,
+            groups: vec![GroupConfig {
+                key: "hog".into(),
+                cap_bytes: 100,
+                always_enforce: false,
+                ..Default::default()
+            }],
+            pause_all: false,
+            ..Default::default()
+        };
+        let mut rt = Runtime::new_inert();
+        rt.battery_override = Some(true);
+        let now = Instant::now();
+        rt.rates.insert("hog".into(), now);
+        let apps = vec![crate::grouper::AppGroup {
+            group_key: "hog".into(),
+            members: vec![crate::grouper::GroupMember {
+                pid: 1,
+                create_time: 1,
+                private_working_set_bytes: 500,
+                private_usage_bytes: 500,
+            }],
+        }];
+        // Past AC limit (20s) but within battery limit (60s).
+        let out = rt
+            .tick_with_groups(
+                &cfg,
+                SystemArm::Armed,
+                &apps,
+                now + TRIM_RATE_LIMIT + Duration::from_secs(1),
+            )
+            .unwrap();
+        assert_eq!(out.trims_attempted, 0);
     }
 
     #[test]
