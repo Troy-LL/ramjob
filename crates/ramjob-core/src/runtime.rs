@@ -10,6 +10,7 @@ use crate::enforcer::{
     ExclusionPolicy, LiveTrimHooks, TRIM_RATE_LIMIT, TrimContext,
 };
 use crate::adaptive::hottest_phase;
+use crate::discovery::{DiscoveryEvent, DiscoverySource, select_discovery};
 use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput, GroupPhase};
 use crate::gate::{run_gate_on_group, GateMeasurement, GATE_SETTLE};
 use crate::grouper::AppGroup;
@@ -27,6 +28,7 @@ pub struct Runtime {
     pub rates: HashMap<String, Instant>,
     pub diagnostics: DiagnosticsRing,
     path_cache: crate::scanner::PathCache,
+    discovery: Box<dyn DiscoverySource>,
     pub(crate) commit_ratios: HashMap<String, crate::commit_ratio::CommitRatio>,
     pub(crate) backstop: JobBackstopStore,
     pub(crate) last_caps: HashMap<String, u64>,
@@ -62,31 +64,60 @@ fn apply_post_trim(measurement: &GateMeasurement, cap_bytes: u64) -> PostTrimObs
 
 impl Runtime {
     pub fn new() -> Self {
+        Self::from_discovery(select_discovery())
+    }
+
+    fn from_discovery(
+        (discovery, _mode, diagnostic): (
+            Box<dyn DiscoverySource>,
+            crate::discovery::DiscoveryMode,
+            Option<String>,
+        ),
+    ) -> Self {
+        let mut diagnostics = DiagnosticsRing::new();
+        if let Some(diag) = diagnostic {
+            diagnostics.push(diag);
+        }
         Self {
             policy: PolicyState::new(),
             groups: HashMap::new(),
             rates: HashMap::new(),
-            diagnostics: DiagnosticsRing::new(),
+            diagnostics,
             path_cache: crate::scanner::PathCache::new(),
+            discovery,
             commit_ratios: HashMap::new(),
             backstop: JobBackstopStore::new(),
             last_caps: HashMap::new(),
         }
     }
 
+    fn apply_discovery_events(&mut self, events: &[DiscoveryEvent]) {
+        for event in events {
+            match event {
+                DiscoveryEvent::Exit { pid, create_time } => {
+                    crate::scanner::path_cache_invalidate(
+                        &mut self.path_cache,
+                        *pid,
+                        *create_time,
+                    );
+                }
+                DiscoveryEvent::Spawn { .. } => {}
+            }
+        }
+    }
+
     /// Test-only constructor with injectable Job Object store.
     #[cfg(test)]
     pub fn new_with_backstop_store(backstop: JobBackstopStore) -> Self {
-        Self {
-            policy: PolicyState::new(),
-            groups: HashMap::new(),
-            rates: HashMap::new(),
-            diagnostics: DiagnosticsRing::new(),
-            path_cache: crate::scanner::PathCache::new(),
-            commit_ratios: HashMap::new(),
-            backstop,
-            last_caps: HashMap::new(),
-        }
+        let mut rt = Self::new();
+        rt.backstop = backstop;
+        rt
+    }
+
+    /// Test-only constructor with injectable discovery source.
+    #[cfg(test)]
+    pub fn new_with_discovery(discovery: Box<dyn DiscoverySource>) -> Self {
+        Self::from_discovery((discovery, crate::discovery::DiscoveryMode::Sweep, None))
     }
 
     /// Test-only read access to the backstop store.
@@ -120,6 +151,9 @@ impl Runtime {
         let system = self.policy.update(sample);
         self.diagnostics
             .push(format!("system={system:?}"));
+
+        let events = self.discovery.poll_events();
+        self.apply_discovery_events(&events);
 
         let procs = crate::scanner::enumerate_processes_with_cache(&mut self.path_cache)
             .map_err(|s| format!("enumerate: {s:?}"))?;
@@ -294,12 +328,108 @@ fn measured_soft_trim(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
     use std::time::Duration;
 
     use crate::config::GroupConfig;
+    use crate::discovery::{DiscoveryEvent, DiscoverySource, EtwOpenError, EtwProcessSource, WmiOpenError, WmiProcessSource, select_discovery_with};
     use crate::fsm::{FsmAction, GroupPhase};
     use crate::gate::{GateMeasurement, GATE_SETTLE};
     use crate::pressure::SimulatedPressure;
+
+    struct MockDiscovery {
+        events: Vec<DiscoveryEvent>,
+    }
+
+    impl DiscoverySource for MockDiscovery {
+        fn poll_events(&mut self) -> Vec<DiscoveryEvent> {
+            std::mem::take(&mut self.events)
+        }
+    }
+
+    #[cfg(test)]
+    impl Runtime {
+        fn path_cache_seed(&mut self, pid: u32, create_time: i64, path: Option<PathBuf>) {
+            self.path_cache.insert((pid, create_time), path);
+        }
+
+        fn path_cache_contains(&self, pid: u32, create_time: i64) -> bool {
+            self.path_cache.contains_key(&(pid, create_time))
+        }
+
+        fn poll_discovery(&mut self) {
+            let events = self.discovery.poll_events();
+            self.apply_discovery_events(&events);
+        }
+    }
+
+    #[test]
+    fn discovery_exit_invalidates_path_cache() {
+        let mut rt = Runtime::new_with_discovery(Box::new(MockDiscovery {
+            events: vec![DiscoveryEvent::Exit {
+                pid: 42,
+                create_time: 100,
+            }],
+        }));
+        rt.path_cache_seed(42, 100, Some(PathBuf::from(r"C:\test.exe")));
+        rt.poll_discovery();
+        assert!(!rt.path_cache_contains(42, 100));
+    }
+
+    #[test]
+    fn discovery_spawn_does_not_require_cache_entry() {
+        let mut rt = Runtime::new_with_discovery(Box::new(MockDiscovery {
+            events: vec![DiscoveryEvent::Spawn {
+                pid: 7,
+                create_time: 200,
+            }],
+        }));
+        rt.poll_discovery();
+        assert!(!rt.path_cache_contains(7, 200));
+    }
+
+    #[test]
+    fn runtime_pushes_discovery_degrade_diagnostic_once() {
+        fn etw_fail() -> Result<EtwProcessSource, EtwOpenError> {
+            Err(EtwOpenError {
+                stage: "test_etw",
+                code: 1,
+            })
+        }
+        fn wmi_ok() -> Result<WmiProcessSource, WmiOpenError> {
+            Ok(WmiProcessSource::new_inject_only())
+        }
+        let rt = Runtime::from_discovery(select_discovery_with(etw_fail, wmi_ok));
+        let lines = rt.diagnostics.lines();
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].contains("test_etw"));
+        assert!(lines[0].contains("falling back"));
+    }
+
+    #[test]
+    fn tick_applies_discovery_before_enumerate() {
+        let mut rt = Runtime::new_with_discovery(Box::new(MockDiscovery {
+            events: vec![DiscoveryEvent::Exit {
+                pid: 42,
+                create_time: 100,
+            }],
+        }));
+        rt.path_cache_seed(42, 100, Some(PathBuf::from(r"C:\stale.exe")));
+        let cfg = RamjobConfig {
+            version: 2,
+            runaway_multiplier: 3.0,
+            overall_limit_bytes: 0,
+            groups: vec![],
+            pause_all: false,
+        };
+        let mut pressure = SimulatedPressure {
+            low_memory: false,
+            high_memory: true,
+            hard_faults_per_sec: 0.0,
+        };
+        rt.tick(&cfg, &mut pressure, Instant::now()).unwrap();
+        assert!(!rt.path_cache_contains(42, 100));
+    }
 
     #[test]
     fn rate_limit_skips_second_trim() {

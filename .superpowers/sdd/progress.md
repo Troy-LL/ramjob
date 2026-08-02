@@ -20,7 +20,7 @@ Prior: **M4 closed** on `milestone/m4-job-backstop` after thermo + ticket 46 APP
 | 2 ETW backend | done | feat(m5): ETW process discovery backend (task 2) |
 | 3 WMI fallback | done | feat(m5): WMI discovery fallback (task 3) |
 | 4 Adaptive sleep | done | feat(m5): adaptive polling ladder (task 4) |
-| 5 Runtime discovery deltas | pending | |
+| 5 Runtime discovery deltas | done | feat(m5): runtime applies discovery events (task 5) |
 | 6 Budget CI harness | pending | |
 | 7 Thermo + lessons | pending | |
 

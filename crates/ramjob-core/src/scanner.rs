@@ -35,6 +35,11 @@ pub struct ProcessRecord {
 pub type PathCacheKey = (u32, i64);
 pub type PathCache = HashMap<PathCacheKey, Option<PathBuf>>;
 
+/// Drop a cached image path for a process identity (discovery Exit / pid reuse).
+pub fn path_cache_invalidate(cache: &mut PathCache, pid: u32, create_time: i64) {
+    cache.remove(&(pid, create_time));
+}
+
 /// Enumerate with a caller-owned path cache. Resolve runs once per new cache key.
 pub fn enumerate_processes_with_cache(
     cache: &mut PathCache,
@@ -283,6 +288,15 @@ mod tests {
             new_keys,
             "OpenProcess/path resolve must run only for newly seen PID+create-time keys"
         );
+    }
+
+    #[test]
+    fn path_cache_invalidate_removes_entry() {
+        let mut cache = PathCache::new();
+        cache.insert((42, 100), Some(PathBuf::from(r"C:\test.exe")));
+        path_cache_invalidate(&mut cache, 42, 100);
+        assert!(!cache.contains_key(&(42, 100)));
+        path_cache_invalidate(&mut cache, 99, 1);
     }
 
     #[test]
