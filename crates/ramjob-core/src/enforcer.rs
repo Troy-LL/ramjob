@@ -56,6 +56,8 @@ pub struct TrimContext<'a> {
     pub rate_limits: &'a mut HashMap<String, Instant>,
     pub now: Instant,
     pub exclusion: ExclusionPolicy,
+    /// Per-tick limit (20 s AC / 60 s battery — SPEC §6.1).
+    pub rate_limit: Duration,
 }
 
 /// Result of one soft-trim attempt (trim-only; ΔGF belongs to the measurement owner).
@@ -98,7 +100,7 @@ pub fn with_trim_lock<R>(f: impl FnOnce() -> R) -> R {
 /// Soft-trim without acquiring `TRIM_LOCK`. Caller must hold it (or accept races).
 pub fn soft_trim_group_unlocked(group: &AppGroup, ctx: &mut TrimContext<'_>) -> TrimOutcome {
     if let Some(last) = ctx.rate_limits.get(&group.group_key) {
-        if ctx.now.saturating_duration_since(*last) < TRIM_RATE_LIMIT {
+        if ctx.now.saturating_duration_since(*last) < ctx.rate_limit {
             return TrimOutcome {
                 trimmed_pids: Vec::new(),
                 excluded_pids: Vec::new(),
@@ -310,6 +312,7 @@ mod tests {
             rate_limits: rates,
             now,
             exclusion,
+            rate_limit: TRIM_RATE_LIMIT,
         }
     }
 
@@ -484,6 +487,7 @@ mod tests {
                     rate_limits: &mut rates,
                     now: Instant::now(),
                     exclusion: ExclusionPolicy::ProtectInteractive,
+                    rate_limit: TRIM_RATE_LIMIT,
                 };
                 soft_trim_group(&g, &mut trim_ctx);
             })

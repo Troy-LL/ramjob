@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use crate::cap_math::clamp_cap_with_policy;
+use crate::chromium_family::is_chromium_family;
 use crate::config::{save_config_atomic, GroupConfig, RamjobConfig};
 use crate::diagnostics::DiagnosticsRing;
 use crate::policy::SystemArm;
@@ -68,6 +69,9 @@ impl PanelState {
         let g = self.upsert_group(key);
         g.cap_bytes = cap;
         g.pinned = true;
+        if cap > 0 && is_chromium_family(key) {
+            g.always_enforce = true;
+        }
         save_config_atomic(&self.config_path, &self.config)
     }
 
@@ -184,6 +188,63 @@ mod tests {
 
         let reloaded = crate::config::load_config_file(&path).unwrap();
         assert_eq!(reloaded.overall_limit_bytes, 12 << 30);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_cap_chromium_family_defaults_always_enforce() {
+        let path = temp_config_path("chromium_cap");
+        let mut s = state(path.clone());
+        let chrome_key = r"c:\program files\google\chrome\application";
+        s.set_cap(chrome_key, 2 * 1024 * 1024 * 1024, false, None)
+            .unwrap();
+        let g = s
+            .config
+            .groups
+            .iter()
+            .find(|g| g.key == chrome_key)
+            .unwrap();
+        assert!(g.always_enforce);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_cap_non_chromium_does_not_enable_always_enforce() {
+        let path = temp_config_path("non_chromium_cap");
+        let mut s = state(path.clone());
+        s.set_cap("hog", 1 << 30, false, None).unwrap();
+        let g = s.config.groups.iter().find(|g| g.key == "hog").unwrap();
+        assert!(!g.always_enforce);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_flags_can_disable_chromium_always_enforce() {
+        let path = temp_config_path("chromium_flags");
+        let mut s = state(path.clone());
+        let chrome_key = "image:chrome";
+        s.set_cap(chrome_key, 1 << 30, false, None).unwrap();
+        assert!(
+            s.config
+                .groups
+                .iter()
+                .find(|g| g.key == chrome_key)
+                .unwrap()
+                .always_enforce
+        );
+        s.set_flags(chrome_key, false).unwrap();
+        assert!(
+            !s
+                .config
+                .groups
+                .iter()
+                .find(|g| g.key == chrome_key)
+                .unwrap()
+                .always_enforce
+        );
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }

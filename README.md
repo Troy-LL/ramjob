@@ -24,9 +24,24 @@ cargo build -p ramjob-app --release
 
 Tray icon appears; click to open the panel. Config: `%APPDATA%\RamJob\config.toml`.
 
-**No MSI** — M6 documents a local `cargo build --release` binary only. Copy `ramjob-app.exe` manually if you need it on another machine; there is no signed installer yet.
+**No MSI** — portable `ramjob-app.exe` only. Copy manually if needed.
+
+**Signing (human-gated):** SmartScreen/AV will distrust unsigned binaries that open other processes. After you have an EV/OV cert, build release then run `.\scripts\sign-release.ps1` with `$env:RAMJOB_SIGN_CERT` set (thumbprint or `.pfx` path).
 
 If `cargo` fails with os error 4551 (Smart App Control), keep `CARGO_TARGET_DIR` under your user profile as above, or turn SAC Off in Windows Security (one-way until OS reset).
+
+## Signing (release)
+
+EV/OV code signing is human-gated. After a release build, sign with:
+
+```powershell
+. .\scripts\dev-env.ps1
+$env:CARGO_TARGET_DIR = "$env:USERPROFILE\ramjob-target"
+$env:RAMJOB_SIGN_CERT = "<thumbprint-or-pfx-path>"
+.\scripts\sign-release.ps1
+```
+
+`RAMJOB_SIGN_CERT` must be set (40-char SHA1 thumbprint or path to `.pfx`; optional `RAMJOB_SIGN_CERT_PASSWORD` for PFX). Without it, the script exits non-zero with a clear message.
 
 ## Quick start — CLI
 

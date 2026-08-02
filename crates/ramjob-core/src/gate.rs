@@ -341,6 +341,7 @@ pub fn run_live_gate(target: GateTarget, settle: Duration) -> Result<GateMeasure
         rate_limits: &mut rates,
         now: Instant::now(),
         exclusion: ExclusionPolicy::None,
+        rate_limit: crate::enforcer::TRIM_RATE_LIMIT,
     };
     run_gate_for_target(&target, &mut ctx, settle)
 }
