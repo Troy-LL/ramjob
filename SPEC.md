@@ -671,6 +671,12 @@ start** under that caveat — a failed full corpus later still fails the product
 force grouping fixes before release, but does not block M3 design/build. Live hard-fault/sec
 sampling stays degraded (`assume_faults_when_low`) into M3 unless fixed earlier.
 
+**M5 → M6 proceed decision (2026-08-03):** M5 ETW + adaptive + budget CI is **closed** after thermo
+Critical/Important = 0 (ticket 56 APPROVED, commit `6f1b279`). Host Smart App Control set **Off**
+for local verify (SAC On had blocked cargo/test with os 4551). **M6 shippable** (config lifecycle
+polish, HKCU Run autostart default Off, §5.4 preflight, §7.3 first-run) may start. Battery and
+Chromium auto-backstop OPENs remain deferred.
+
 ---
 
 ## 11. Open questions

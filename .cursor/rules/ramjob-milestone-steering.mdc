@@ -8,9 +8,9 @@ alwaysApply: true
 
 ## Current milestone
 
-**M5 — ETW discovery, adaptive polling, budget CI**  
-Prior: M4 closed on `milestone/m4-job-backstop` (thermo + ticket 46 APPROVED `7c1a0a0`).  
-Do not start M6 until M5 thermo Critical/Important = 0.
+**M6 — Config, autostart, preflight, first-run (shippable)**  
+Prior: M5 closed on `milestone/m5-etw-budget` (thermo + ticket 56 APPROVED `6f1b279`).  
+Do not invent M7 scope; finish M6 then ship.
 
 ## Pipeline (every milestone / plan)
 
@@ -92,3 +92,4 @@ When an approach fails or a review/thermo finding costs a redo:
 - 2026-07-27 M2: runtime duplicated §2.3 measure + stubbed FSM inputs — lesson `single-measure-owner`; WinPressure ARM uses `assume_faults_when_low` until real fault counter ships.- 2026-07-27: open M3 with M0 multi-machine corpus as ongoing user testing (SPEC �10 proceed note); M1 Pass.
 - 2026-08-03 M3: panel-hide stopped Runtime tick — lesson `always-on-engine-cadence`; M3 closed, M4 opened (user delegated decisions).
 - 2026-08-03 M4: JobHandle+mem::forget closed store job on Err — lesson `handle-forget-closes-job`; M4 closed, M5 opened.
+- 2026-08-03 M5: ETW/WMI join before session stop — lesson `etw-stop-before-join`; SAC Off unblocked verify; M5 closed, M6 opened.
