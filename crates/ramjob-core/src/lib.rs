@@ -1,5 +1,6 @@
 pub mod adaptive;
 pub mod accountant;
+pub mod budget;
 pub mod cap_math;
 pub mod commit_ratio;
 pub mod config;

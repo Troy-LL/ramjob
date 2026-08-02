@@ -31,5 +31,6 @@ $env:CARGO_TARGET_DIR = "$env:USERPROFILE\ramjob-target"
 4. Prefer incremental rebuilds of already-trusted artifacts under that dir. A clean rebuild of large graphs (Tauri) may still trip SAC until the user turns SAC **Off** (Windows Security → App & browser control → Smart App Control; one-way until OS reset).
 5. Re-run the failing package first (`cargo test -p ramjob-core`) before `--workspace`.
 6. Record the recipe in the task report when nonstandard.
+7. If toasts say “Part of this app has been blocked — Some features of `…\.rustup`” and **already-built** `ramjob-target\debug\deps\*.exe` also fail with 4551 *never executed*, SAC is blocking **execution**, not only build-scripts. Profile `CARGO_TARGET_DIR` is not enough — need SAC Off or an allowlist for that target dir + `.rustup` / `.cargo`.
 
 **Done when:** the intended `cargo` command links and runs without 4551, or the report states SAC Off is required for the remaining crates.
