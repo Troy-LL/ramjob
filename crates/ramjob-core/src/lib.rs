@@ -13,6 +13,7 @@ pub mod fsm;
 pub mod gate;
 pub mod grouper;
 pub mod panel;
+pub mod preflight;
 pub mod policy;
 pub mod pressure;
 pub mod runtime;
