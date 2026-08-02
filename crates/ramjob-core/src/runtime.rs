@@ -10,7 +10,7 @@ use crate::enforcer::{
     ExclusionPolicy, LiveTrimHooks, TRIM_RATE_LIMIT, TrimContext,
 };
 use crate::adaptive::hottest_phase;
-use crate::discovery::{DiscoveryEvent, DiscoverySource, select_discovery};
+use crate::discovery::{DiscoveryEvent, DiscoveryMode, DiscoverySource, InertDiscovery, select_discovery};
 use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput, GroupPhase};
 use crate::gate::{run_gate_on_group, GateMeasurement, GATE_SETTLE};
 use crate::grouper::AppGroup;
@@ -29,6 +29,7 @@ pub struct Runtime {
     pub diagnostics: DiagnosticsRing,
     path_cache: crate::scanner::PathCache,
     discovery: Box<dyn DiscoverySource>,
+    discovery_mode: DiscoveryMode,
     pub(crate) commit_ratios: HashMap<String, crate::commit_ratio::CommitRatio>,
     pub(crate) backstop: JobBackstopStore,
     pub(crate) last_caps: HashMap<String, u64>,
@@ -68,9 +69,9 @@ impl Runtime {
     }
 
     fn from_discovery(
-        (discovery, _mode, diagnostic): (
+        (discovery, mode, diagnostic): (
             Box<dyn DiscoverySource>,
-            crate::discovery::DiscoveryMode,
+            DiscoveryMode,
             Option<String>,
         ),
     ) -> Self {
@@ -85,10 +86,16 @@ impl Runtime {
             diagnostics,
             path_cache: crate::scanner::PathCache::new(),
             discovery,
+            discovery_mode: mode,
             commit_ratios: HashMap::new(),
             backstop: JobBackstopStore::new(),
             last_caps: HashMap::new(),
         }
+    }
+
+    /// Active discovery backend (ETW / WMI / sweep).
+    pub fn discovery_mode(&self) -> DiscoveryMode {
+        self.discovery_mode
     }
 
     fn apply_discovery_events(&mut self, events: &[DiscoveryEvent]) {
@@ -106,10 +113,10 @@ impl Runtime {
         }
     }
 
-    /// Test-only constructor with injectable Job Object store.
+    /// Test-only constructor with injectable Job Object store (inert discovery).
     #[cfg(test)]
     pub fn new_with_backstop_store(backstop: JobBackstopStore) -> Self {
-        let mut rt = Self::new();
+        let mut rt = Self::new_with_discovery(Box::new(InertDiscovery));
         rt.backstop = backstop;
         rt
     }
@@ -117,7 +124,12 @@ impl Runtime {
     /// Test-only constructor with injectable discovery source.
     #[cfg(test)]
     pub fn new_with_discovery(discovery: Box<dyn DiscoverySource>) -> Self {
-        Self::from_discovery((discovery, crate::discovery::DiscoveryMode::Sweep, None))
+        Self::from_discovery((discovery, DiscoveryMode::Sweep, None))
+    }
+
+    /// Runtime without live ETW/WMI (unit / integration tests).
+    pub fn new_inert() -> Self {
+        Self::from_discovery((Box::new(InertDiscovery), DiscoveryMode::Sweep, None))
     }
 
     /// Test-only read access to the backstop store.
@@ -152,11 +164,18 @@ impl Runtime {
         self.diagnostics
             .push(format!("system={system:?}"));
 
-        let events = self.discovery.poll_events();
+        let events;
+        let procs = if self.discovery_mode == DiscoveryMode::Sweep {
+            let procs = crate::scanner::enumerate_processes_with_cache(&mut self.path_cache)
+                .map_err(|s| format!("enumerate: {s:?}"))?;
+            events = self.discovery.poll_events_from_enumerate(&procs);
+            procs
+        } else {
+            events = self.discovery.poll_events();
+            crate::scanner::enumerate_processes_with_cache(&mut self.path_cache)
+                .map_err(|s| format!("enumerate: {s:?}"))?
+        };
         self.apply_discovery_events(&events);
-
-        let procs = crate::scanner::enumerate_processes_with_cache(&mut self.path_cache)
-            .map_err(|s| format!("enumerate: {s:?}"))?;
         let apps = crate::grouper::group_processes(&procs);
         self.tick_with_groups(config, system, &apps, now)
     }
@@ -400,6 +419,7 @@ mod tests {
             Ok(WmiProcessSource::new_inject_only())
         }
         let rt = Runtime::from_discovery(select_discovery_with(etw_fail, wmi_ok));
+        assert_eq!(rt.discovery_mode(), crate::discovery::DiscoveryMode::Wmi);
         let lines = rt.diagnostics.lines();
         assert_eq!(lines.len(), 1);
         assert!(lines[0].contains("test_etw"));
@@ -444,7 +464,7 @@ mod tests {
             }],
             pause_all: false,
         };
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new_inert();
         let now = Instant::now();
         rt.rates.insert("hog".into(), now);
         let apps = vec![crate::grouper::AppGroup {
@@ -464,7 +484,7 @@ mod tests {
 
     #[test]
     fn always_enforce_fsm_wants_soft_trim() {
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new_inert();
         let now = Instant::now();
         let fsm = rt.groups.entry("hog".into()).or_default();
         let action = fsm.step(GroupFsmInput {
@@ -533,7 +553,7 @@ mod tests {
             }],
             pause_all: false,
         };
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new_inert();
         let apps = vec![crate::grouper::AppGroup {
             group_key: "hog".into(),
             members: vec![crate::grouper::GroupMember {

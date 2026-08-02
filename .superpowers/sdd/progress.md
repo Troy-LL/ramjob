@@ -22,7 +22,7 @@ Prior: **M4 closed** on `milestone/m4-job-backstop` after thermo + ticket 46 APP
 | 4 Adaptive sleep | done | feat(m5): adaptive polling ladder (task 4) |
 | 5 Runtime discovery deltas | done | feat(m5): runtime applies discovery events (task 5) |
 | 6 Budget CI harness | done | (this commit; run blocked by SAC 4551 — see m5-verify.md) |
-| 7 Thermo + lessons | blocked | needs cargo test execution; SAC On |
+| 7 Thermo + lessons | done | fix(m5): thermo C1/C2 lifecycle + Important discovery judo (task 7) |
 
 Design: `docs/superpowers/specs/2026-08-03-m5-etw-adaptive-budget-design.md`  
 Plan: `docs/superpowers/plans/2026-08-03-m5-etw-adaptive-budget.md`

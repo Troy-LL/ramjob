@@ -158,7 +158,7 @@ fn runtime_pressure_ticks_sample_without_backstop_arm() {
         }],
         pause_all: false,
     };
-    let mut rt = Runtime::new();
+    let mut rt = Runtime::new_inert();
     let t0 = Instant::now();
 
     for i in 0..MIN_SAMPLES {

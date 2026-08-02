@@ -1,16 +1,21 @@
-//! Process discovery: spawn/exit deltas between polls (M5 §6.1 sweep backend).
+//! Process discovery: spawn/exit deltas between polls (M5 Â§6.1 sweep backend).
 
 mod etw;
+mod inert;
+mod queued;
 mod sweep;
 mod wmi;
 
 use std::collections::HashSet;
 
 pub use etw::{etw_degrade_diagnostic, EtwOpenError, EtwProcessSource};
+pub use inert::InertDiscovery;
 pub use sweep::SweepDiscovery;
 pub use wmi::{wmi_degrade_diagnostic, WmiOpenError, WmiProcessSource};
 
-/// `(pid, create_time)` process identity (same key as trim ΔGF intersection).
+use crate::scanner::ProcessRecord;
+
+/// `(pid, create_time)` process identity (same key as trim Î”GF intersection).
 pub type ProcessIdentity = (u32, i64);
 
 /// Spawn or exit notification from a [`DiscoverySource`].
@@ -31,9 +36,15 @@ pub enum DiscoveryMode {
 /// Event-driven process discovery (ETW / WMI / sweep backends).
 pub trait DiscoverySource: Send {
     fn poll_events(&mut self) -> Vec<DiscoveryEvent>;
+
+    /// Sweep uses Runtime's single NtQSI enumerate; ETW/WMI ignore `procs`.
+    fn poll_events_from_enumerate(&mut self, procs: &[ProcessRecord]) -> Vec<DiscoveryEvent> {
+        let _ = procs;
+        self.poll_events()
+    }
 }
 
-/// Select the best available discovery backend: ETW → WMI → sweep.
+/// Select the best available discovery backend: ETW â†’ WMI â†’ sweep.
 ///
 /// Returns the source, which mode was selected, and an optional one-shot degrade
 /// diagnostic when ETW or WMI was unavailable.

@@ -116,7 +116,7 @@ fn armed_over_cap_trims_once_then_rate_limits() {
             }],
             pause_all: false,
         };
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new_inert();
         let now = Instant::now();
         let apps = vec![hog];
 

@@ -26,6 +26,15 @@ cargo build -p ramjob-cli -p ramjob-app
 | Compile | OK |
 | Run test binaries | **FAIL — os error 4551** |
 
+### 2026-08-03 ~02:20 (SAC Off — task 56 thermo)
+
+| Check | Result |
+|---|---|
+| `SmartAppControlState` | **Off** |
+| `cargo test -p ramjob-core` | **151 passed**, 3 ignored; m2_integration + m4_backstop green |
+| `cargo build -p ramjob-cli` | OK |
+| `cargo build -p ramjob-app` | OK |
+
 ### 2026-08-03 ~02:12 (SAC Off — user)
 
 | Check | Result |

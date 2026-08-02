@@ -2,20 +2,18 @@
 
 use std::collections::HashSet;
 
-use crate::scanner::{enumerate_processes_with_cache, PathCache};
+use crate::scanner::ProcessRecord;
 
 use super::{diff_identities, DiscoveryEvent, DiscoverySource, ProcessIdentity};
 
-/// Last-resort discovery: full process enumerate each poll, diff `(pid, create_time)`.
+/// Last-resort discovery: diff `(pid, create_time)` snapshots (no own enumerate).
 pub struct SweepDiscovery {
-    path_cache: PathCache,
     seen: HashSet<ProcessIdentity>,
 }
 
 impl SweepDiscovery {
     pub fn new() -> Self {
         Self {
-            path_cache: PathCache::new(),
             seen: HashSet::new(),
         }
     }
@@ -39,10 +37,10 @@ impl Default for SweepDiscovery {
 
 impl DiscoverySource for SweepDiscovery {
     fn poll_events(&mut self) -> Vec<DiscoveryEvent> {
-        let procs = match enumerate_processes_with_cache(&mut self.path_cache) {
-            Ok(p) => p,
-            Err(_) => return Vec::new(),
-        };
+        Vec::new()
+    }
+
+    fn poll_events_from_enumerate(&mut self, procs: &[ProcessRecord]) -> Vec<DiscoveryEvent> {
         let current: HashSet<ProcessIdentity> = procs
             .iter()
             .filter(|p| p.pid != 0)
@@ -88,8 +86,8 @@ mod tests {
     }
 
     #[test]
-    fn sweep_enumerate_poll_does_not_panic() {
+    fn sweep_from_enumerate_does_not_panic() {
         let mut sweep = SweepDiscovery::new();
-        let _ = sweep.poll_events();
+        let _ = sweep.poll_events_from_enumerate(&[]);
     }
 }

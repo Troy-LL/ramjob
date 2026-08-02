@@ -5,16 +5,13 @@
 //! drains that queue. If session open or consumer attach fails, [`EtwProcessSource::try_new`] returns
 //! [`EtwOpenError`] so the caller can fall back to WMI / sweep.
 
-use std::collections::VecDeque;
 use std::mem::size_of;
-use std::sync::atomic::{AtomicPtr, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
 use windows::core::GUID;
-use windows::Win32::Foundation::{GetLastError, ERROR_ALREADY_EXISTS, ERROR_SUCCESS};
+use windows::Win32::Foundation::{ERROR_ALREADY_EXISTS, ERROR_SUCCESS};
 use windows::Win32::System::Diagnostics::Etw::{
     CloseTrace, ControlTraceW, EnableTraceEx2, OpenTraceW, ProcessTrace, StartTraceW,
     CONTROLTRACE_HANDLE, EVENT_CONTROL_CODE_ENABLE_PROVIDER, EVENT_TRACE_CONTROL_STOP,
@@ -25,6 +22,7 @@ use windows::Win32::System::Diagnostics::Etw::{
 use windows::Win32::System::Diagnostics::Etw::{EVENT_RECORD, EVENT_TRACE_LOGFILEW};
 use windows::Win32::System::Threading::GetCurrentProcessId;
 
+use super::queued::QueuedDiscovery;
 use super::{DiscoveryEvent, DiscoverySource};
 
 /// Microsoft-Windows-Kernel-Process provider.
@@ -36,6 +34,9 @@ const KEYWORD_PROCESS: u64 = 0x10;
 
 const EVENT_PROCESS_START: u16 = 1;
 const EVENT_PROCESS_STOP: u16 = 2;
+
+/// `WAIT_TIMEOUT` — parent recv_timeout; not a consumer OpenTraceW error.
+const OPEN_ATTACH_TIMEOUT_CODE: u32 = 1460;
 
 /// Failure to open or enable the ETW kernel-process session.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -60,12 +61,9 @@ pub fn etw_degrade_diagnostic(err: &EtwOpenError) -> String {
     )
 }
 
-type EventQueue = Arc<Mutex<VecDeque<DiscoveryEvent>>>;
-type QueuePtr = Mutex<VecDeque<DiscoveryEvent>>;
-
 /// ETW-backed process discovery via `Microsoft-Windows-Kernel-Process`.
 pub struct EtwProcessSource {
-    queue: EventQueue,
+    queued: QueuedDiscovery,
     session: Option<EtwSession>,
     consumer: Option<JoinHandle<()>>,
 }
@@ -76,10 +74,10 @@ struct EtwSession {
     logger_name: Vec<u16>,
 }
 
-impl Drop for EtwSession {
-    fn drop(&mut self) {
+impl EtwSession {
+    fn stop(&self) {
         unsafe {
-            let props = self.properties_buf.as_mut_ptr() as *mut EVENT_TRACE_PROPERTIES;
+            let props = self.properties_buf.as_ptr() as *mut EVENT_TRACE_PROPERTIES;
             let _ = ControlTraceW(
                 self.trace_handle,
                 windows::core::PCWSTR(self.logger_name.as_ptr()),
@@ -90,25 +88,27 @@ impl Drop for EtwSession {
     }
 }
 
-/// Shared queue pointer for the ETW callback (one active source per process).
-static CALLBACK_QUEUE: AtomicPtr<QueuePtr> = AtomicPtr::new(std::ptr::null_mut());
+impl Drop for EtwSession {
+    fn drop(&mut self) {
+        self.stop();
+    }
+}
 
 impl EtwProcessSource {
     /// Open a real-time kernel-process ETW session. Returns `Err` when ETW is
     /// unavailable (access denied, session conflict, consumer attach failure, etc.)
     /// so callers degrade.
     pub fn try_new() -> Result<Self, EtwOpenError> {
-        let queue: EventQueue = Arc::new(Mutex::new(VecDeque::new()));
+        let queued = QueuedDiscovery::new();
         let session = open_kernel_process_session()?;
-        match start_consumer_thread(&session.logger_name, &queue) {
+        match start_consumer_thread(&session, queued.inner()) {
             Ok(consumer) => Ok(Self {
-                queue,
+                queued,
                 session: Some(session),
                 consumer: Some(consumer),
             }),
             Err(e) => {
-                // Drop session to stop the trace before returning degrade Err.
-                drop(session);
+                session.stop();
                 Err(e)
             }
         }
@@ -116,15 +116,13 @@ impl EtwProcessSource {
 
     /// Push events into the poll queue (unit tests / harness).
     pub fn inject_events(&mut self, events: impl IntoIterator<Item = DiscoveryEvent>) {
-        if let Ok(mut q) = self.queue.lock() {
-            q.extend(events);
-        }
+        self.queued.inject_events(events);
     }
 
     #[cfg(test)]
     pub(crate) fn new_inject_only() -> Self {
         Self {
-            queue: Arc::new(Mutex::new(VecDeque::new())),
+            queued: QueuedDiscovery::new(),
             session: None,
             consumer: None,
         }
@@ -133,19 +131,12 @@ impl EtwProcessSource {
 
 impl DiscoverySource for EtwProcessSource {
     fn poll_events(&mut self) -> Vec<DiscoveryEvent> {
-        let mut out = Vec::new();
-        if let Ok(mut q) = self.queue.lock() {
-            while let Some(e) = q.pop_front() {
-                out.push(e);
-            }
-        }
-        out
+        self.queued.drain()
     }
 }
 
 impl Drop for EtwProcessSource {
     fn drop(&mut self) {
-        CALLBACK_QUEUE.store(std::ptr::null_mut(), Ordering::Release);
         // Stop trace before joining the consumer (ProcessTrace blocks until stop).
         self.session = None;
         if let Some(handle) = self.consumer.take() {
@@ -233,71 +224,83 @@ fn open_kernel_process_session() -> Result<EtwSession, EtwOpenError> {
 }
 
 fn start_consumer_thread(
-    logger_name: &[u16],
-    queue: &EventQueue,
+    session: &EtwSession,
+    queue: &std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>>,
 ) -> Result<JoinHandle<()>, EtwOpenError> {
-    let name_copy: Vec<u16> = logger_name.to_vec();
-    CALLBACK_QUEUE.store(Arc::as_ptr(queue) as *mut QueuePtr, Ordering::Release);
-
+    let name_copy: Vec<u16> = session.logger_name.clone();
+    let queue = std::sync::Arc::clone(queue);
     let (ready_tx, ready_rx) = mpsc::channel();
+
     let handle = thread::Builder::new()
         .name("ramjob-etw-consumer".into())
-        .spawn(move || run_consumer(&name_copy, ready_tx))
-        .map_err(|e| {
-            CALLBACK_QUEUE.store(std::ptr::null_mut(), Ordering::Release);
-            EtwOpenError {
-                stage: "spawn_consumer",
-                code: e.raw_os_error().unwrap_or(1) as u32,
-            }
+        .spawn(move || run_consumer(&name_copy, queue, ready_tx))
+        .map_err(|e| EtwOpenError {
+            stage: "spawn_consumer",
+            code: e.raw_os_error().unwrap_or(1) as u32,
         })?;
 
     match ready_rx.recv_timeout(Duration::from_secs(5)) {
         Ok(Ok(())) => Ok(handle),
         Ok(Err(e)) => {
-            CALLBACK_QUEUE.store(std::ptr::null_mut(), Ordering::Release);
+            session.stop();
             let _ = handle.join();
             Err(e)
         }
         Err(_) => {
-            CALLBACK_QUEUE.store(std::ptr::null_mut(), Ordering::Release);
+            session.stop();
             let _ = handle.join();
             Err(EtwOpenError {
                 stage: "OpenTraceW",
-                code: unsafe { GetLastError().0 },
+                code: OPEN_ATTACH_TIMEOUT_CODE,
             })
         }
     }
 }
 
-fn open_consumer_trace(logger_name: &[u16]) -> Result<PROCESSTRACE_HANDLE, EtwOpenError> {
+type EventQueue = std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>>;
+
+fn open_consumer_trace(
+    logger_name: &[u16],
+    queue_ptr: *const std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>,
+) -> Result<PROCESSTRACE_HANDLE, EtwOpenError> {
     unsafe {
         let mut logfile = EVENT_TRACE_LOGFILEW::default();
         logfile.LoggerName = windows::core::PWSTR(logger_name.as_ptr() as *mut u16);
         logfile.Anonymous1.ProcessTraceMode =
             PROCESS_TRACE_MODE_REAL_TIME | PROCESS_TRACE_MODE_EVENT_RECORD;
         logfile.Anonymous2.EventRecordCallback = Some(etw_event_callback);
+        logfile.Context = queue_ptr as *mut _;
 
         let trace_handle = OpenTraceW(&mut logfile);
         if trace_handle == PROCESSTRACE_HANDLE::default() || trace_handle.Value == u64::MAX {
             return Err(EtwOpenError {
                 stage: "OpenTraceW",
-                code: GetLastError().0,
+                code: windows::Win32::Foundation::GetLastError().0,
             });
         }
         Ok(trace_handle)
     }
 }
 
-fn run_consumer(logger_name: &[u16], ready: mpsc::Sender<Result<(), EtwOpenError>>) {
-    match open_consumer_trace(logger_name) {
+fn run_consumer(
+    logger_name: &[u16],
+    queue: EventQueue,
+    ready: mpsc::Sender<Result<(), EtwOpenError>>,
+) {
+    let queue_ptr = std::sync::Arc::into_raw(queue);
+    match open_consumer_trace(logger_name, queue_ptr) {
         Ok(trace_handle) => {
             let _ = ready.send(Ok(()));
             unsafe {
                 let _ = ProcessTrace(&[trace_handle], None, None);
                 let _ = CloseTrace(trace_handle);
+                let _ = std::sync::Arc::from_raw(queue_ptr);
             }
         }
         Err(e) => {
+            unsafe {
+                let _ = std::sync::Arc::from_raw(queue_ptr);
+            }
             let _ = ready.send(Err(e));
         }
     }
@@ -307,14 +310,16 @@ unsafe extern "system" fn etw_event_callback(event: *mut EVENT_RECORD) {
     if event.is_null() {
         return;
     }
-    let Some(mapped) = map_kernel_process_event(&*event) else {
+    let record = &*event;
+    let Some(mapped) = map_kernel_process_event(record) else {
         return;
     };
-    let ptr = CALLBACK_QUEUE.load(Ordering::Acquire);
-    if ptr.is_null() {
+    let ctx = record.UserContext;
+    if ctx.is_null() {
         return;
     }
-    if let Ok(mut q) = unsafe { (*ptr).lock() } {
+    let queue = &*(ctx as *const std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>);
+    if let Ok(mut q) = queue.lock() {
         q.push_back(mapped);
     }
 }

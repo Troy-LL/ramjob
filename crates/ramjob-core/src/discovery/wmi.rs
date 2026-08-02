@@ -5,10 +5,9 @@
 //! queue; [`DiscoverySource::poll_events`] drains that queue. If COM/WMI setup
 //! fails, [`WmiProcessSource::try_new`] returns [`WmiOpenError`] for sweep fallback.
 
-use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
@@ -21,6 +20,7 @@ use windows::Win32::System::Wmi::{
     ISWbemEventSource, ISWbemLocator, ISWbemObject, ISWbemServices, SWbemLocator,
 };
 
+use super::queued::QueuedDiscovery;
 use super::{DiscoveryEvent, DiscoverySource};
 
 const WMI_CREATE_QUERY: &str =
@@ -52,8 +52,6 @@ pub fn wmi_degrade_diagnostic(err: &WmiOpenError) -> String {
     )
 }
 
-type EventQueue = Arc<Mutex<VecDeque<DiscoveryEvent>>>;
-
 struct WmiSubscriptions {
     create_source: ISWbemEventSource,
     delete_source: ISWbemEventSource,
@@ -61,7 +59,7 @@ struct WmiSubscriptions {
 
 /// WMI-backed process discovery via `Win32_Process` instance events.
 pub struct WmiProcessSource {
-    queue: EventQueue,
+    queued: QueuedDiscovery,
     shutdown: Arc<AtomicBool>,
     consumer: Option<JoinHandle<()>>,
 }
@@ -70,11 +68,11 @@ impl WmiProcessSource {
     /// Open WMI process event subscriptions. Returns `Err` when COM/WMI is unavailable
     /// so callers degrade to sweep.
     pub fn try_new() -> Result<Self, WmiOpenError> {
-        let queue: EventQueue = Arc::new(Mutex::new(VecDeque::new()));
+        let queued = QueuedDiscovery::new();
         let shutdown = Arc::new(AtomicBool::new(false));
-        let consumer = start_consumer_thread(&queue, &shutdown)?;
+        let consumer = start_consumer_thread(queued.inner(), &shutdown)?;
         Ok(Self {
-            queue,
+            queued,
             shutdown,
             consumer: Some(consumer),
         })
@@ -82,15 +80,13 @@ impl WmiProcessSource {
 
     /// Push events into the poll queue (unit tests / harness).
     pub fn inject_events(&mut self, events: impl IntoIterator<Item = DiscoveryEvent>) {
-        if let Ok(mut q) = self.queue.lock() {
-            q.extend(events);
-        }
+        self.queued.inject_events(events);
     }
 
     #[cfg(test)]
     pub(crate) fn new_inject_only() -> Self {
         Self {
-            queue: Arc::new(Mutex::new(VecDeque::new())),
+            queued: QueuedDiscovery::new(),
             shutdown: Arc::new(AtomicBool::new(false)),
             consumer: None,
         }
@@ -99,13 +95,7 @@ impl WmiProcessSource {
 
 impl DiscoverySource for WmiProcessSource {
     fn poll_events(&mut self) -> Vec<DiscoveryEvent> {
-        let mut out = Vec::new();
-        if let Ok(mut q) = self.queue.lock() {
-            while let Some(e) = q.pop_front() {
-                out.push(e);
-            }
-        }
-        out
+        self.queued.drain()
     }
 }
 
@@ -188,16 +178,16 @@ fn open_wmi_subscriptions() -> Result<WmiSubscriptions, WmiOpenError> {
 }
 
 fn start_consumer_thread(
-    queue: &EventQueue,
+    queue: &std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>>,
     shutdown: &Arc<AtomicBool>,
 ) -> Result<JoinHandle<()>, WmiOpenError> {
-    let queue = Arc::clone(queue);
-    let shutdown = Arc::clone(shutdown);
+    let queue = std::sync::Arc::clone(queue);
+    let shutdown_for_worker = Arc::clone(&shutdown);
     let (ready_tx, ready_rx) = mpsc::channel();
 
     let handle = thread::Builder::new()
         .name("ramjob-wmi-consumer".into())
-        .spawn(move || run_consumer_thread(queue, shutdown, ready_tx))
+        .spawn(move || run_consumer_thread(queue, shutdown_for_worker, ready_tx))
         .map_err(|e| WmiOpenError {
             stage: "spawn_consumer",
             code: e.raw_os_error().unwrap_or(1) as u32,
@@ -206,10 +196,12 @@ fn start_consumer_thread(
     match ready_rx.recv_timeout(Duration::from_secs(15)) {
         Ok(Ok(())) => Ok(handle),
         Ok(Err(e)) => {
+            shutdown.store(true, Ordering::Release);
             let _ = handle.join();
             Err(e)
         }
         Err(_) => {
+            shutdown.store(true, Ordering::Release);
             let _ = handle.join();
             Err(WmiOpenError {
                 stage: "open_subscriptions",
@@ -220,7 +212,7 @@ fn start_consumer_thread(
 }
 
 fn run_consumer_thread(
-    queue: EventQueue,
+    queue: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>>,
     shutdown: Arc<AtomicBool>,
     ready: mpsc::Sender<Result<(), WmiOpenError>>,
 ) {
@@ -259,7 +251,7 @@ fn run_consumer_thread(
 
 fn run_consumer(
     subscriptions: WmiSubscriptions,
-    queue: EventQueue,
+    queue: std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>>,
     shutdown: Arc<AtomicBool>,
 ) {
     while !shutdown.load(Ordering::Acquire) {
@@ -281,7 +273,10 @@ fn run_consumer(
     }
 }
 
-fn push_event(queue: &EventQueue, event: DiscoveryEvent) {
+fn push_event(
+    queue: &std::sync::Arc<std::sync::Mutex<std::collections::VecDeque<DiscoveryEvent>>>,
+    event: DiscoveryEvent,
+) {
     if let Ok(mut q) = queue.lock() {
         q.push_back(event);
     }
@@ -314,7 +309,7 @@ pub(crate) fn map_wmi_target_instance(
     unsafe {
         let props = target.Properties_().ok()?;
         let pid = property_u32(&props, "ProcessId")?;
-        let create_time = property_create_time(&props).unwrap_or(0);
+        let create_time = property_create_time(&props)?;
         map_wmi_process_fields(pid, create_time, kind)
     }
 }
@@ -361,7 +356,18 @@ fn variant_to_swem_object(var: &VARIANT) -> Option<ISWbemObject> {
         .and_then(|unk| unk.cast().ok())
 }
 
-/// Convert WMI `CreationDate` (`YYYYMMDDHHmmss.ffffff+UUU`) to NtQSI-style 100 ns ticks since 1601.
+/// Parse CIM_DATETIME bias suffix (`+UUU` / `-UUU` minutes from UTC).
+fn wmi_timezone_bias_minutes(text: &str) -> Option<i64> {
+    let sign_idx = text.rfind(['+', '-'])?;
+    let sign = text.as_bytes()[sign_idx];
+    if sign_idx + 4 > text.len() {
+        return None;
+    }
+    let digits: i64 = text[sign_idx + 1..sign_idx + 4].parse().ok()?;
+    Some(if sign == b'-' { -digits } else { digits })
+}
+
+/// Convert WMI `CreationDate` (`YYYYMMDDHHmmss.ffffff±UUU`) to NtQSI-style 100 ns ticks since 1601 UTC.
 pub(crate) fn wmi_datetime_to_create_time(text: &str) -> Option<i64> {
     if text.len() < 14 {
         return None;
@@ -389,8 +395,11 @@ pub(crate) fn wmi_datetime_to_create_time(text: &str) -> Option<i64> {
     };
 
     let days = days_since_1601(year, month, day)?;
-    let ticks = (days * 86_400 + hour * 3_600 + minute * 60 + second) * 10_000_000 + fraction;
-    Some(ticks)
+    let local_ticks =
+        (days * 86_400 + hour * 3_600 + minute * 60 + second) * 10_000_000 + fraction;
+    let bias_minutes = wmi_timezone_bias_minutes(text).unwrap_or(0);
+    // WMI local time + bias → UTC (e.g. -480 means 480 min west of UTC).
+    Some(local_ticks - bias_minutes * 60 * 10_000_000)
 }
 
 fn days_since_1601(year: i64, month: i64, day: i64) -> Option<i64> {
@@ -419,6 +428,20 @@ mod tests {
     fn wmi_datetime_maps_to_filetime_ticks() {
         let ticks = wmi_datetime_to_create_time("20240102030405.000000+000").unwrap();
         assert!(ticks > 0);
+    }
+
+    #[test]
+    fn wmi_datetime_applies_negative_timezone_bias() {
+        let utc = wmi_datetime_to_create_time("20240102030405.000000+000").unwrap();
+        let west = wmi_datetime_to_create_time("20240102030405.000000-480").unwrap();
+        assert_eq!(west - utc, 480 * 60 * 10_000_000);
+    }
+
+    #[test]
+    fn wmi_datetime_applies_positive_timezone_bias() {
+        let utc = wmi_datetime_to_create_time("20240102030405.000000+000").unwrap();
+        let east = wmi_datetime_to_create_time("20240102030405.000000+330").unwrap();
+        assert_eq!(utc - east, 330 * 60 * 10_000_000);
     }
 
     #[test]
