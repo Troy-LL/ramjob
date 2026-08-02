@@ -239,6 +239,7 @@ fn wide(s: &str) -> Vec<u16> {
 mod tests {
     use super::*;
     use std::collections::HashMap;
+    use std::path::PathBuf;
     use std::sync::{Arc, Mutex};
 
     #[derive(Clone, Default)]
