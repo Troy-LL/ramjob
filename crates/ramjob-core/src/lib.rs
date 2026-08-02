@@ -2,6 +2,7 @@ pub mod accountant;
 pub mod cap_math;
 pub mod commit_ratio;
 pub mod config;
+pub mod job_backstop;
 pub mod diagnostics;
 pub mod enforcer;
 pub mod fsm;
