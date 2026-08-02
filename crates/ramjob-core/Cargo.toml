@@ -12,11 +12,13 @@ toml = "0.8"
 windows = { version = "0.58", features = [
     "Win32_Foundation",
     "Win32_Security",
+    "Win32_System_Diagnostics_Etw",
     "Win32_System_JobObjects",
     "Win32_System_Threading",
     "Win32_System_Memory",
     "Win32_System_ProcessStatus",
     "Win32_System_SystemInformation",
+    "Win32_System_Time",
     "Win32_UI_WindowsAndMessaging",
     "Wdk_System_SystemInformation",
 ] }

@@ -17,7 +17,7 @@ Prior: **M4 closed** on `milestone/m4-job-backstop` after thermo + ticket 46 APP
 | Task | Status | Commit |
 |---|---|---|
 | 1 DiscoverySource + sweep | done | feat(m5): DiscoverySource + sweep backend (task 1) |
-| 2 ETW backend | pending | |
+| 2 ETW backend | done | feat(m5): ETW process discovery backend (task 2) |
 | 3 WMI fallback | pending | |
 | 4 Adaptive sleep | pending | |
 | 5 Runtime discovery deltas | pending | |

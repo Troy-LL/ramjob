@@ -1,9 +1,11 @@
 //! Process discovery: spawn/exit deltas between polls (M5 §6.1 sweep backend).
 
+mod etw;
 mod sweep;
 
 use std::collections::HashSet;
 
+pub use etw::{etw_degrade_diagnostic, EtwOpenError, EtwProcessSource};
 pub use sweep::SweepDiscovery;
 
 /// `(pid, create_time)` process identity (same key as trim ΔGF intersection).
