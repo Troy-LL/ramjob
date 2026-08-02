@@ -1,15 +1,25 @@
+pub mod adaptive;
 pub mod accountant;
+pub mod autostart;
+pub mod budget;
 pub mod cap_math;
+pub mod commit_ratio;
 pub mod config;
+pub mod job_backstop;
 pub mod diagnostics;
+pub mod discovery;
 pub mod enforcer;
 pub mod fsm;
 pub mod gate;
 pub mod grouper;
 pub mod panel;
+pub mod preflight;
 pub mod policy;
 pub mod pressure;
 pub mod runtime;
+mod runtime_backstop;
 pub mod scanner;
 pub mod sys_history;
+#[cfg(windows)]
+pub(crate) mod win_reg;
 pub mod yield_math;

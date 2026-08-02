@@ -87,6 +87,7 @@ mod tests {
                     pid,
                     create_time: 1,
                     private_working_set_bytes,
+                    private_usage_bytes: private_working_set_bytes,
                 })
                 .collect(),
         }

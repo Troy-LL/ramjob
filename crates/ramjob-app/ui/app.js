@@ -4,6 +4,10 @@
 const MIN_GF_BYTES = 50 * 1024 * 1024; // 50 MB "Show all apps" floor
 const GB = 1024 * 1024 * 1024;
 
+// SPEC §7.4 — shown when enabling hard backstop (always_enforce).
+const BACKSTOP_WARNING =
+  "If this app can't handle running out of memory, it may crash or lose unsaved work.";
+
 // Build some fake history: 30 samples over the last ~15 minutes, wobbling
 // around 8-11 GB used out of 16 GB total, with one ceiling edit partway
 // through (14 GB -> 12 GB) to exercise stepped-ceiling rendering.
@@ -36,30 +40,33 @@ const MOCK_SNAPSHOT = {
   samples: mockHistory.samples,
   ceiling_edits: mockHistory.ceilingEdits,
   groups: [
-    { key: "chrome", name: "Google Chrome", gf_bytes: 2.1 * 1024 * 1024 * 1024, cap_bytes: 4 * 1024 * 1024 * 1024, always_enforce: false, fsm_hint: "Idle", honest: null },
-    { key: "slack", name: "Slack", gf_bytes: 900 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle", honest: null },
-    { key: "vscode", name: "Visual Studio Code", gf_bytes: 1.3 * 1024 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Pressure", honest: null },
-    { key: "docker", name: "Docker Desktop", gf_bytes: 3.4 * 1024 * 1024 * 1024, cap_bytes: 6 * 1024 * 1024 * 1024, always_enforce: true, fsm_hint: "Idle", honest: null },
-    { key: "spotify", name: "Spotify", gf_bytes: 30 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle", honest: null },
-    { key: "figma", name: "Figma", gf_bytes: 420 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle", honest: null },
+    { key: "chrome", name: "Google Chrome", gf_bytes: 2.1 * 1024 * 1024 * 1024, cap_bytes: 4 * 1024 * 1024 * 1024, always_enforce: false, fsm_hint: "Idle" },
+    { key: "slack", name: "Slack", gf_bytes: 900 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
+    { key: "vscode", name: "Visual Studio Code", gf_bytes: 1.3 * 1024 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Pressure" },
+    { key: "docker", name: "Docker Desktop", gf_bytes: 3.4 * 1024 * 1024 * 1024, cap_bytes: 6 * 1024 * 1024 * 1024, always_enforce: true, fsm_hint: "Idle" },
+    { key: "spotify", name: "Spotify", gf_bytes: 30 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
+    { key: "figma", name: "Figma", gf_bytes: 420 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
   ],
+  first_run: false,
+  preflight_notes: [],
 };
 
 const isTauri = () => typeof window !== "undefined" && !!window.__TAURI__;
 
+async function ipc(cmd, args) {
+  if (!isTauri()) return null;
+  const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
+  return args === undefined ? invoke(cmd) : invoke(cmd, args);
+}
+
 async function fetchSnapshot() {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("get_snapshot");
-  }
-  return MOCK_SNAPSHOT;
+  const live = await ipc("get_snapshot");
+  return live ?? MOCK_SNAPSHOT;
 }
 
 async function callPauseAll(pause) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("pause_all", { pause });
-  }
+  const live = await ipc("pause_all", { pause });
+  if (live) return live;
   MOCK_SNAPSHOT.pause_all = pause;
   return MOCK_SNAPSHOT;
 }
@@ -92,10 +99,8 @@ function snapCeilingBytesPreview(raw, shiftFine) {
 }
 
 async function callSetOverallLimit(limitBytes, shiftFine) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("set_overall_limit", { limitBytes, shiftFine });
-  }
+  const live = await ipc("set_overall_limit", { limitBytes, shiftFine });
+  if (live) return live;
   const snapped = snapCeilingBytesPreview(limitBytes, shiftFine);
   MOCK_SNAPSHOT.overall_limit_bytes = snapped;
   MOCK_SNAPSHOT.ceiling_edits.push({ unix_ms: Date.now(), overall_limit_bytes: snapped });
@@ -103,10 +108,8 @@ async function callSetOverallLimit(limitBytes, shiftFine) {
 }
 
 async function callSetCap(key, capBytes, shiftFine) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("set_cap", { key, capBytes, shiftFine });
-  }
+  const live = await ipc("set_cap", { key, capBytes, shiftFine });
+  if (live) return live;
   const snapped = snapCapBytesPreview(capBytes, shiftFine);
   const g = MOCK_SNAPSHOT.groups.find((g) => g.key === key);
   if (g) g.cap_bytes = snapped;
@@ -114,18 +117,12 @@ async function callSetCap(key, capBytes, shiftFine) {
 }
 
 async function callCopyDiagnostics() {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("copy_diagnostics");
-  }
-  // No clipboard IPC outside Tauri (browser preview) — no-op.
+  await ipc("copy_diagnostics");
 }
 
 async function callSetFlags(key, alwaysEnforce) {
-  if (isTauri()) {
-    const { invoke } = window.__TAURI__.core ?? window.__TAURI__.tauri;
-    return invoke("set_flags", { key, alwaysEnforce });
-  }
+  const live = await ipc("set_flags", { key, alwaysEnforce });
+  if (live) return live;
   const g = MOCK_SNAPSHOT.groups.find((g) => g.key === key);
   if (g) g.always_enforce = alwaysEnforce;
   return MOCK_SNAPSHOT;
@@ -160,13 +157,17 @@ function renderPill(snapshot) {
 // per-app dial, so an app's marker and fill line up regardless of its cap.
 const DIAL_LADDER_MAX = 16 * GB;
 
-// Per-key live drag preview (cap bytes), so dragging one card's marker never
-// touches IPC until pointer-up commits it. Cleared once the next real
-// snapshot renders that key without an active drag.
-const capDragPreview = {};
+// Per-key live drag preview. Stashes frozen dialMax so unlimited→cap drags
+// don't flip the angular scale mid-gesture (which pinned the marker to 1.0).
+const capDragPreview = {}; // key -> { bytes, dialMax }
 
-function honestMessage(fsmHint, honest) {
-  if (honest) return honest;
+function honestMessage(fsmHint, group) {
+  if (group && group.cap_bytes > 0 && group.gf_bytes > group.cap_bytes) {
+    return `${group.name} is using ${formatBytes(group.gf_bytes)}. Capping at ${formatBytes(group.cap_bytes)} will push memory out of RAM and may make it feel slower.`;
+  }
+  if (group && group.always_enforce) {
+    return BACKSTOP_WARNING;
+  }
   if (fsmHint === "LowYield") {
     return "Capping this isn't freeing much — Windows is compressing the memory rather than releasing it. Raising the cap won't cost you much.";
   }
@@ -246,15 +247,31 @@ function buildArcGauge({ width, height, fillFrac, fillColor, markerFrac, markerC
 
       marker.addEventListener("pointerdown", (ev) => {
         ev.preventDefault();
-        marker.setPointerCapture(ev.pointerId);
-        const onMove = (moveEv) => onDrag(fracFromPointer(moveEv.clientX, moveEv.clientY));
-        const onUp = async (upEv) => {
-          marker.removeEventListener("pointermove", onMove);
-          marker.removeEventListener("pointerup", onUp);
+        const pointerId = ev.pointerId;
+        // Document listeners survive preview DOM updates; also listen for
+        // pointercancel so cancelled gestures don't leak handlers.
+        const onMove = (moveEv) => {
+          if (moveEv.pointerId !== pointerId) return;
+          const frac = fracFromPointer(moveEv.clientX, moveEv.clientY);
+          const p = pointAt(frac);
+          marker.setAttribute("cx", p.x.toFixed(1));
+          marker.setAttribute("cy", p.y.toFixed(1));
+          onDrag(frac);
+        };
+        const teardown = async (upEv) => {
+          if (upEv.pointerId !== pointerId) return;
+          document.removeEventListener("pointermove", onMove);
+          document.removeEventListener("pointerup", teardown);
+          document.removeEventListener("pointercancel", teardown);
+          if (upEv.type === "pointercancel") {
+            onDrag(markerFrac);
+            return;
+          }
           await onCommit(fracFromPointer(upEv.clientX, upEv.clientY), upEv.shiftKey);
         };
-        marker.addEventListener("pointermove", onMove);
-        marker.addEventListener("pointerup", onUp);
+        document.addEventListener("pointermove", onMove);
+        document.addEventListener("pointerup", teardown);
+        document.addEventListener("pointercancel", teardown);
       });
     }
     svg.appendChild(marker);
@@ -297,10 +314,25 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
   grid.innerHTML = "";
 
   const groups = sortGroups(snapshot.groups);
-  const hidden = groups.filter((g) => g.gf_bytes < MIN_GF_BYTES);
-  document.getElementById("hidden-count").textContent = hidden.length;
-
-  const visible = showAll ? groups : groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES);
+  const aboveFloor = groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES);
+  const anyCapped = groups.some((g) => g.cap_bytes > 0);
+  // SPEC §7.3 first-run: top 5. Default: ≥50MB. Show all: every IPC group.
+  let visible;
+  if (showAll) {
+    visible = groups;
+  } else if (!anyCapped) {
+    visible = aboveFloor.slice(0, 5);
+  } else {
+    visible = aboveFloor;
+  }
+  document.getElementById("hidden-count").textContent = String(
+    Math.max(0, groups.length - visible.length)
+  );
+  const toggle = document.getElementById("show-all-toggle");
+  if (toggle) {
+    const hiddenN = Math.max(0, groups.length - visible.length);
+    toggle.textContent = showAll ? "Show fewer apps ▴" : `Show all apps (${hiddenN}) ▾`;
+  }
 
   for (const g of visible) {
     const card = document.createElement("div");
@@ -322,9 +354,21 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
     gaugeWrap.className = "app-gauge";
     const rect = { width: 176, height: 62 }; // fits the ~193px card minus padding
     const preview = capDragPreview[g.key];
-    const capBytes = preview != null ? preview : g.cap_bytes;
-    const fillFrac = Math.min(1, g.gf_bytes / DIAL_LADDER_MAX);
-    const markerFrac = Math.min(1, (capBytes > 0 ? capBytes : DIAL_LADDER_MAX) / DIAL_LADDER_MAX);
+    const committedCap = g.cap_bytes;
+    // Freeze dialMax for the whole gesture once a preview exists.
+    const dialMax =
+      preview?.dialMax ??
+      (committedCap > 0
+        ? Math.max(committedCap, g.gf_bytes, CAP_SNAP_BYTES[0])
+        : Math.max(snapshot.total_bytes || DIAL_LADDER_MAX, g.gf_bytes, CAP_SNAP_BYTES[0]));
+    const capBytes = preview != null ? preview.bytes : committedCap;
+    const fillFrac = Math.min(1, g.gf_bytes / dialMax);
+    const markerFrac = Math.min(1, (capBytes > 0 ? capBytes : dialMax) / dialMax);
+
+    const meta = document.createElement("div");
+    meta.className = "app-meta";
+    meta.textContent = `${formatBytes(g.gf_bytes)}${g.cap_bytes ? " / cap " + formatBytes(g.cap_bytes) : " / unlimited"}`;
+
     const gaugeSvg = buildArcGauge({
       width: rect.width,
       height: rect.height,
@@ -333,24 +377,20 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
       markerFrac,
       markerColor: "#c8860d",
       onDrag: (frac) => {
-        capDragPreview[g.key] = Math.round(frac * DIAL_LADDER_MAX);
-        renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag);
+        const bytes = Math.round(frac * dialMax);
+        capDragPreview[g.key] = { bytes, dialMax };
+        meta.textContent = `${formatBytes(g.gf_bytes)} / cap ${formatBytes(bytes || 0)}`;
       },
       onCommit: async (frac, shiftFine) => {
         delete capDragPreview[g.key];
-        const capBytes = Math.round(frac * DIAL_LADDER_MAX);
-        await onCommitCap(g.key, capBytes, shiftFine);
+        await onCommitCap(g.key, Math.round(frac * dialMax), shiftFine);
       },
     });
     gaugeWrap.appendChild(gaugeSvg);
     card.appendChild(gaugeWrap);
-
-    const meta = document.createElement("div");
-    meta.className = "app-meta";
-    meta.textContent = `${formatBytes(g.gf_bytes)}${g.cap_bytes ? " / cap " + formatBytes(g.cap_bytes) : " / unlimited"}`;
     card.appendChild(meta);
 
-    const honestText = honestMessage(g.fsm_hint, g.honest);
+    const honestText = honestMessage(g.fsm_hint, g);
     if (honestText) {
       const warn = document.createElement("div");
       warn.className = "app-honest";
@@ -369,6 +409,12 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
     });
     label.append(checkbox, document.createTextNode(" Always enforce (hard backstop)"));
     popover.appendChild(label);
+    if (g.always_enforce) {
+      const backstopWarn = document.createElement("div");
+      backstopWarn.className = "gear-backstop-warning";
+      backstopWarn.textContent = BACKSTOP_WARNING;
+      popover.appendChild(backstopWarn);
+    }
     card.appendChild(popover);
 
     gearBtn.addEventListener("click", () => {
@@ -379,15 +425,22 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
   }
 }
 
-// SPEC §7.3: no wizard — just a one-line explainer, shown only while the
-// panel is in its true first-run state (nothing capped yet, few apps visible).
-function renderFirstRunHint(snapshot, showAll) {
+// SPEC §7.3: no wizard — one-line explainer + §5.4 preflight notes while first_run.
+function renderFirstRunHint(snapshot) {
   const hint = document.getElementById("first-run-hint");
-  const anyCapped = snapshot.groups.some((g) => g.cap_bytes > 0);
-  const visibleCount = showAll
-    ? snapshot.groups.length
-    : snapshot.groups.filter((g) => g.gf_bytes >= MIN_GF_BYTES).length;
-  hint.classList.toggle("hidden", anyCapped || visibleCount > 5);
+  const notesEl = document.getElementById("preflight-notes");
+  const firstRun = !!snapshot.first_run;
+  hint.classList.toggle("hidden", !firstRun);
+  if (!firstRun) return;
+
+  const notes = snapshot.preflight_notes ?? [];
+  if (notes.length) {
+    notesEl.textContent = notes.join(" ");
+    notesEl.classList.remove("hidden");
+  } else {
+    notesEl.textContent = "";
+    notesEl.classList.add("hidden");
+  }
 }
 
 function renderStatusLine(snapshot) {
@@ -519,6 +572,20 @@ function renderHistoryChart(snapshot, onCommitLimit) {
   handle.style.cursor = "ns-resize";
   svg.appendChild(handle);
 
+  // Live preview of the ceiling height while dragging (no full chart rebuild —
+  // rebuilding would detach this SVG and break bytesFromY / pointer handlers).
+  const previewLine = document.createElementNS(SVG_NS, "line");
+  previewLine.setAttribute("x1", String(CHART_PAD));
+  previewLine.setAttribute("x2", String(width - CHART_PAD));
+  previewLine.setAttribute("y1", handleY.toFixed(1));
+  previewLine.setAttribute("y2", handleY.toFixed(1));
+  previewLine.setAttribute("stroke", "#c8860d");
+  previewLine.setAttribute("stroke-width", "1.5");
+  previewLine.setAttribute("stroke-dasharray", "4 3");
+  previewLine.setAttribute("opacity", "0");
+  svg.appendChild(previewLine);
+  svg.appendChild(handle);
+
   const bytesFromY = (clientY) => {
     const box = svg.getBoundingClientRect();
     const scale = height / box.height;
@@ -530,24 +597,37 @@ function renderHistoryChart(snapshot, onCommitLimit) {
 
   handle.addEventListener("pointerdown", (ev) => {
     ev.preventDefault();
-    handle.setPointerCapture(ev.pointerId);
+    const pointerId = ev.pointerId;
     dragState.active = true;
     dragState.previewBytes = snapshot.overall_limit_bytes;
+    previewLine.setAttribute("opacity", "1");
 
     const onMove = (moveEv) => {
+      if (moveEv.pointerId !== pointerId) return;
       dragState.previewBytes = bytesFromY(moveEv.clientY);
-      renderHistoryChart(snapshot, onCommitLimit); // live preview only, no IPC
+      const y = yOf(dragState.previewBytes);
+      handle.setAttribute("cy", y.toFixed(1));
+      previewLine.setAttribute("y1", y.toFixed(1));
+      previewLine.setAttribute("y2", y.toFixed(1));
     };
-    const onUp = async (upEv) => {
-      handle.removeEventListener("pointermove", onMove);
-      handle.removeEventListener("pointerup", onUp);
+    const teardown = async (upEv) => {
+      if (upEv.pointerId !== pointerId) return;
+      document.removeEventListener("pointermove", onMove);
+      document.removeEventListener("pointerup", teardown);
+      document.removeEventListener("pointercancel", teardown);
       const finalBytes = dragState.previewBytes;
       const shiftFine = upEv.shiftKey;
       dragState.active = false;
-      await onCommitLimit(finalBytes, shiftFine); // commits + refreshes snapshot
+      previewLine.setAttribute("opacity", "0");
+      if (upEv.type === "pointercancel") {
+        renderHistoryChart(snapshot, onCommitLimit);
+        return;
+      }
+      await onCommitLimit(finalBytes, shiftFine);
     };
-    handle.addEventListener("pointermove", onMove);
-    handle.addEventListener("pointerup", onUp);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", teardown);
+    document.addEventListener("pointercancel", teardown);
   });
 
   container.appendChild(svg);
@@ -556,27 +636,33 @@ function renderHistoryChart(snapshot, onCommitLimit) {
 async function main() {
   let snapshot = await fetchSnapshot();
   let showAll = false;
+  let lastFingerprint = JSON.stringify(snapshot);
+
+  const applySnapshot = (next) => {
+    snapshot = next;
+    lastFingerprint = JSON.stringify(next);
+  };
 
   const render = () => {
     renderPill(snapshot);
     renderStatusLine(snapshot);
-    renderFirstRunHint(snapshot, showAll);
+    renderFirstRunHint(snapshot);
     renderHeroGauge(snapshot);
     renderAppGrid(
       snapshot,
       showAll,
       async (key, capBytes, shiftFine) => {
-        snapshot = await callSetCap(key, capBytes, shiftFine);
+        applySnapshot(await callSetCap(key, capBytes, shiftFine));
         render();
       },
       async (key, alwaysEnforce) => {
-        snapshot = await callSetFlags(key, alwaysEnforce);
+        applySnapshot(await callSetFlags(key, alwaysEnforce));
         render();
       }
     );
     renderPauseButton(snapshot);
     renderHistoryChart(snapshot, async (limitBytes, shiftFine) => {
-      snapshot = await callSetOverallLimit(limitBytes, shiftFine);
+      applySnapshot(await callSetOverallLimit(limitBytes, shiftFine));
       render();
     });
   };
@@ -607,7 +693,7 @@ async function main() {
   });
 
   document.getElementById("pause-all-btn").addEventListener("click", async () => {
-    snapshot = await callPauseAll(!snapshot.pause_all);
+    applySnapshot(await callPauseAll(!snapshot.pause_all));
     renderPauseButton(snapshot);
     renderStatusLine(snapshot);
   });
@@ -618,7 +704,10 @@ async function main() {
   // per-app cap drag) so a poll-driven re-render can't fight/reset it.
   setInterval(async () => {
     if (dragState.active || Object.keys(capDragPreview).length > 0) return;
-    snapshot = await fetchSnapshot();
+    const next = await fetchSnapshot();
+    const fp = JSON.stringify(next);
+    if (fp === lastFingerprint) return;
+    applySnapshot(next);
     render();
   }, 1000);
 }

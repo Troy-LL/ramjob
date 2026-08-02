@@ -22,6 +22,8 @@ pub struct ProcessRecord {
     pub session_id: u32,
     pub image_name: String,
     pub private_working_set_bytes: u64,
+    /// Commit charge (`PROCESS_MEMORY_COUNTERS_EX::PrivateUsage`); SPI `PagefileUsage`.
+    pub private_usage_bytes: u64,
     /// Total working set (SPI `WorkingSetSize`), used for CompressStore.
     pub working_set_bytes: u64,
     /// FILETIME ticks (100ns since 1601-01-01 UTC).
@@ -32,6 +34,11 @@ pub struct ProcessRecord {
 /// `(pid, create_time)` → resolved image path (`None` means resolve failed once).
 pub type PathCacheKey = (u32, i64);
 pub type PathCache = HashMap<PathCacheKey, Option<PathBuf>>;
+
+/// Drop a cached image path for a process identity (discovery Exit / pid reuse).
+pub fn path_cache_invalidate(cache: &mut PathCache, pid: u32, create_time: i64) {
+    cache.remove(&(pid, create_time));
+}
 
 /// Enumerate with a caller-owned path cache. Resolve runs once per new cache key.
 pub fn enumerate_processes_with_cache(
@@ -68,6 +75,7 @@ pub fn enumerate_processes_with_cache(
                 session_id: entry.session_id,
                 image_name,
                 private_working_set_bytes: entry.working_set_private_size.max(0) as u64,
+                private_usage_bytes: entry.pagefile_usage as u64,
                 working_set_bytes: entry.working_set_size as u64,
                 create_time,
                 image_path,
@@ -280,6 +288,15 @@ mod tests {
             new_keys,
             "OpenProcess/path resolve must run only for newly seen PID+create-time keys"
         );
+    }
+
+    #[test]
+    fn path_cache_invalidate_removes_entry() {
+        let mut cache = PathCache::new();
+        cache.insert((42, 100), Some(PathBuf::from(r"C:\test.exe")));
+        path_cache_invalidate(&mut cache, 42, 100);
+        assert!(!cache.contains_key(&(42, 100)));
+        path_cache_invalidate(&mut cache, 99, 1);
     }
 
     #[test]

@@ -17,6 +17,10 @@ pub struct PanelSnapshot {
     pub overall_limit_bytes: u64,
     pub status_line: String,
     pub warning: bool, // any LOW_YIELD/THRASHING
+    /// True while no per-app caps are set (SPEC §7.3 first-run).
+    pub first_run: bool,
+    /// User-facing §5.4 warnings for the first-run panel (dormancy, pagefile, privilege).
+    pub preflight_notes: Vec<String>,
     pub samples: Vec<SysSample>,
     pub ceiling_edits: Vec<CeilingEdit>,
     pub groups: Vec<PanelGroup>,
@@ -30,7 +34,6 @@ pub struct PanelGroup {
     pub cap_bytes: u64,
     pub always_enforce: bool,
     pub fsm_hint: String, // "Idle"|"Pressure"|"Trim"|"LowYield"|"Thrashing"|...
-    pub honest: Option<String>, // SPEC §7.4 message when applicable
 }
 
 pub struct PanelState {
@@ -40,6 +43,19 @@ pub struct PanelState {
 }
 
 impl PanelState {
+    fn upsert_group(&mut self, key: &str) -> &mut GroupConfig {
+        if let Some(i) = self.config.groups.iter().position(|g| g.key == key) {
+            return &mut self.config.groups[i];
+        }
+        self.config.groups.push(GroupConfig {
+            key: key.to_string(),
+            cap_bytes: 0,
+            always_enforce: false,
+            ..Default::default()
+        });
+        self.config.groups.last_mut().expect("just pushed")
+    }
+
     /// Upsert a group's cap by key, snapping + flooring via `cap_math`, then persist.
     pub fn set_cap(
         &mut self,
@@ -49,15 +65,9 @@ impl PanelState {
         median_gf: Option<u64>,
     ) -> Result<(), String> {
         let cap = clamp_cap_with_policy(raw_cap, shift_fine, median_gf);
-        if let Some(g) = self.config.groups.iter_mut().find(|g| g.key == key) {
-            g.cap_bytes = cap;
-        } else {
-            self.config.groups.push(GroupConfig {
-                key: key.to_string(),
-                cap_bytes: cap,
-                always_enforce: false,
-            });
-        }
+        let g = self.upsert_group(key);
+        g.cap_bytes = cap;
+        g.pinned = true;
         save_config_atomic(&self.config_path, &self.config)
     }
 
@@ -81,15 +91,9 @@ impl PanelState {
     /// Set a group's `always_enforce` flag (opt-in hard backstop), persisting config.
     /// Creates the group with a zero cap if it doesn't exist yet, same as `set_cap`.
     pub fn set_flags(&mut self, key: &str, always_enforce: bool) -> Result<(), String> {
-        if let Some(g) = self.config.groups.iter_mut().find(|g| g.key == key) {
-            g.always_enforce = always_enforce;
-        } else {
-            self.config.groups.push(GroupConfig {
-                key: key.to_string(),
-                cap_bytes: 0,
-                always_enforce,
-            });
-        }
+        let g = self.upsert_group(key);
+        g.always_enforce = always_enforce;
+        g.pinned = true;
         save_config_atomic(&self.config_path, &self.config)
     }
 
@@ -120,6 +124,7 @@ impl PanelState {
         let warning = groups
             .iter()
             .any(|g| g.fsm_hint == "LowYield" || g.fsm_hint == "Thrashing");
+        let first_run = !self.config.groups.iter().any(|g| g.cap_bytes > 0);
 
         PanelSnapshot {
             system_arm: system_arm.to_string(),
@@ -129,6 +134,8 @@ impl PanelState {
             overall_limit_bytes: self.config.overall_limit_bytes,
             status_line,
             warning,
+            first_run,
+            preflight_notes: Vec::new(),
             samples: self.history.samples().to_vec(),
             ceiling_edits: self.history.ceiling_edits().to_vec(),
             groups: groups.to_vec(),
@@ -153,13 +160,7 @@ mod tests {
     }
 
     fn empty_config() -> RamjobConfig {
-        RamjobConfig {
-            version: 2,
-            runaway_multiplier: 3.0,
-            overall_limit_bytes: 0,
-            groups: vec![],
-            pause_all: false,
-        }
+        RamjobConfig::default()
     }
 
     fn state(path: PathBuf) -> PanelState {
@@ -210,6 +211,7 @@ mod tests {
             key: "hog".into(),
             cap_bytes: 1 << 30,
             always_enforce: true,
+            ..Default::default()
         });
         s.set_cap("hog", 4 * 1024 * 1024 * 1024, false, None)
             .unwrap();
@@ -217,6 +219,32 @@ mod tests {
         assert_eq!(s.config.groups.len(), 1);
         assert_eq!(s.config.groups[0].cap_bytes, 4 * 1024 * 1024 * 1024);
         assert!(s.config.groups[0].always_enforce);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_cap_pins_group_for_prune() {
+        let path = temp_config_path("pin_cap");
+        let mut s = state(path.clone());
+        s.set_cap("hog", 1 << 30, false, None).unwrap();
+        assert!(s.config.groups.iter().find(|g| g.key == "hog").unwrap().pinned);
+
+        let reloaded = crate::config::load_config_file(&path).unwrap();
+        assert!(reloaded.groups[0].pinned);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_flags_pins_group_for_prune() {
+        let path = temp_config_path("pin_flags");
+        let mut s = state(path.clone());
+        s.set_flags("hog", true).unwrap();
+        assert!(s.config.groups.iter().find(|g| g.key == "hog").unwrap().pinned);
+
+        let reloaded = crate::config::load_config_file(&path).unwrap();
+        assert!(reloaded.groups[0].pinned);
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
@@ -300,10 +328,33 @@ mod tests {
             cap_bytes: 100,
             always_enforce: false,
             fsm_hint: "Thrashing".into(),
-            honest: None,
         }];
         let snap = s.build_snapshot(SystemArm::Armed, 0, 0, &groups);
         assert!(snap.warning);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn build_snapshot_first_run_when_no_caps() {
+        let path = temp_config_path("first_run");
+        let s = state(path.clone());
+        let snap = s.build_snapshot(SystemArm::Disarmed, 0, 0, &[]);
+        assert!(snap.first_run);
+        assert!(snap.preflight_notes.is_empty());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn build_snapshot_not_first_run_when_cap_set() {
+        let path = temp_config_path("not_first_run");
+        let mut s = state(path.clone());
+        s.config.groups.push(GroupConfig {
+            key: "hog".into(),
+            cap_bytes: 1 << 30,
+            ..Default::default()
+        });
+        let snap = s.build_snapshot(SystemArm::Disarmed, 0, 0, &[]);
+        assert!(!snap.first_run);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

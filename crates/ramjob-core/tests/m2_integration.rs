@@ -59,6 +59,7 @@ fn wait_for_hog_group(pid: u32) -> AppGroup {
                     pid: p.pid,
                     create_time: p.create_time,
                     private_working_set_bytes: p.private_working_set_bytes,
+                    private_usage_bytes: p.private_usage_bytes,
                 }],
             })
         });
@@ -112,10 +113,12 @@ fn armed_over_cap_trims_once_then_rate_limits() {
                 key: hog.group_key.clone(),
                 cap_bytes: 1_000_000, // 1 MiB — below hog GF
                 always_enforce: false,
+                ..Default::default()
             }],
             pause_all: false,
+            ..Default::default()
         };
-        let mut rt = Runtime::new();
+        let mut rt = Runtime::new_inert();
         let now = Instant::now();
         let apps = vec![hog];
 

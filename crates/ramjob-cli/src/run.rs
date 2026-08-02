@@ -1,8 +1,9 @@
 //! `ramjob run` daemon loop (M2).
 
 use std::path::{Path, PathBuf};
-use std::time::{Duration, Instant};
+use std::time::Instant;
 
+use ramjob_core::adaptive::next_sleep;
 use ramjob_core::config::{default_config_template, load_config_file, parse_config, RamjobConfig};
 use ramjob_core::pressure::{SimulatedPressure, WinPressure};
 use ramjob_core::runtime::Runtime;
@@ -140,10 +141,12 @@ pub fn run_daemon(args: RunArgs) {
         if args.once {
             break;
         }
-        let sleep = match rt.policy.arm {
-            ramjob_core::policy::SystemArm::Armed => Duration::from_secs(1),
-            ramjob_core::policy::SystemArm::Disarmed => Duration::from_secs(15),
-        };
+        let sleep = next_sleep(
+            rt.policy.arm,
+            rt.hottest_group_phase(),
+            false,
+            rt.backstop_active(),
+        );
         std::thread::sleep(sleep);
     }
 }

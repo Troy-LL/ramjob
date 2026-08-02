@@ -132,6 +132,7 @@ mod tests {
             session_id: 0,
             image_name: image_name.into(),
             private_working_set_bytes: 0,
+            private_usage_bytes: 0,
             working_set_bytes,
             create_time: 1,
             image_path: None,

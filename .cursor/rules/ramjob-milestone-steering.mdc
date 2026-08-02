@@ -1,4 +1,4 @@
----
+﻿---
 description: RamJob milestone steering — brainstorm, SPEC, SDD, poteto, thermo
 globs:
 alwaysApply: true
@@ -8,10 +8,8 @@ alwaysApply: true
 
 ## Current milestone
 
-**M3 — Tray + panel + sliders**  
-Prior: M0/M1/M2 implementation done on `milestone/m2-policy-fsm`.  
-M0 formal 3-machine corpus = ongoing user testing (SPEC §10 proceed decision 2026-07-27).  
-Do not start M4 Job Objects until M3 UX path is agreed.
+**M6 closed — shippable v0** on `milestone/m6-shippable` (thermo + ticket 66 APPROVED `4161e1e`).  
+SPEC §10 M0–M6 complete for local release build. No M7 in SPEC — post-ship = OPEN polish (battery, Chromium auto-backstop, distribution/signing) only when explicitly scoped.
 
 ## Pipeline (every milestone / plan)
 
@@ -90,4 +88,8 @@ When an approach fails or a review/thermo finding costs a redo:
 - 2026-07-27 process: encode brainstorm→recommend-first→SPEC→plans→SDD/poteto→thermo; SPEC must stay untruncated SOT.
 - 2026-07-27 M1: trim_lock before settle; dual ΔGF — lesson `trim-lock-covers-settle`.
 - 2026-07-27 M0: global PathCache / LNK1181 — lessons `no-premature-global-cache`, `windows-msvc-sdk-env`.
-- 2026-07-27 M2: runtime duplicated §2.3 measure + stubbed FSM inputs — lesson `single-measure-owner`; WinPressure ARM uses `assume_faults_when_low` until real fault counter ships.- 2026-07-27: open M3 with M0 multi-machine corpus as ongoing user testing (SPEC �10 proceed note); M1 Pass.
+- 2026-07-27 M2: runtime duplicated §2.3 measure + stubbed FSM inputs — lesson `single-measure-owner`; WinPressure ARM uses `assume_faults_when_low` until real fault counter ships.- 2026-07-27: open M3 with M0 multi-machine corpus as ongoing user testing (SPEC �10 proceed note); M1 Pass.
+- 2026-08-03 M3: panel-hide stopped Runtime tick — lesson `always-on-engine-cadence`; M3 closed, M4 opened (user delegated decisions).
+- 2026-08-03 M4: JobHandle+mem::forget closed store job on Err — lesson `handle-forget-closes-job`; M4 closed, M5 opened.
+- 2026-08-03 M5: ETW/WMI join before session stop — lesson `etw-stop-before-join`; SAC Off unblocked verify; M5 closed, M6 opened.
+- 2026-08-03 M6: pagefile MB×GiB (C1), tick config rewrite ~1 Hz (I1) — lessons `pagefile-mb-to-bytes`, `tick-persist-day-bucket`; M6 closed shippable v0.
