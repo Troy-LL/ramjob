@@ -677,6 +677,12 @@ for local verify (SAC On had blocked cargo/test with os 4551). **M6 shippable** 
 polish, HKCU Run autostart default Off, §5.4 preflight, §7.3 first-run) may start. Battery and
 Chromium auto-backstop OPENs remain deferred.
 
+**M6 closed — shippable v0 (2026-08-03):** M6 thermo Critical/Important = 0 (ticket 66 APPROVED,
+commit `4161e1e`) on `milestone/m6-shippable`. Delivered: `autostart` + prune/pinned, HKCU Run
+helper, §5.4 preflight, tray Settings “Start with Windows”, §7.3 first-run + preflight panel copy,
+verify/ship notes (`cargo build -p ramjob-app --release`; no MSI). Battery, Chromium auto-backstop,
+distribution, and code-signing OPENs remain deferred.
+
 ---
 
 ## 11. Open questions

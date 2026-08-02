@@ -1,7 +1,8 @@
 # SDD progress — RamJob
 
-Milestone: **M6** (Config, autostart, preflight, first-run) — thermo in progress  
-Prior: **M5 closed** on `milestone/m5-etw-budget` after thermo + ticket 56 APPROVED (`6f1b279`).
+Milestone: **M6 closed** (shippable v0)  
+Branch: `milestone/m6-shippable`  
+Thermo fix: ticket 66 APPROVED (`4161e1e`)
 
 ## M5 closeout
 
@@ -9,9 +10,18 @@ Prior: **M5 closed** on `milestone/m5-etw-budget` after thermo + ticket 56 APPRO
 |---|---|
 | Tasks 1–7 | done |
 | Thermo | Crit 2 / Imp 6 → fixed ticket 56 |
-| Ticket 56 review | APPROVED (Spec PASS, Quality APPROVED) |
-| Lessons | `etw-stop-before-join` (+ SAC execute-block note in `windows-smart-app-control-cargo`) |
-| Verify | 151 tests; cli+app build; SAC Off on host |
+| Ticket 56 review | APPROVED |
+| Lessons | `etw-stop-before-join` |
+
+## M6 closeout
+
+| Item | Status |
+|---|---|
+| Tasks 1–6 | done |
+| Thermo | Crit 1 / Imp 7 → fixed ticket 66 |
+| Ticket 66 review | APPROVED (Spec PASS, Quality APPROVED) |
+| Lessons | `pagefile-mb-to-bytes`, `tick-persist-day-bucket` |
+| Verify | workspace tests green; release `ramjob-app` build; see `m6-verify.md` |
 
 ## M6 tasks
 

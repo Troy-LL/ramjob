@@ -14,6 +14,8 @@ Repeatable approach failures captured as skills or structural checks.
 | always-on cadence | [always-on-engine-cadence](always-on-engine-cadence/SKILL.md) | Panel hide stops Runtime tick; tooltip-only path |
 | handle forget | [handle-forget-closes-job](handle-forget-closes-job/SKILL.md) | Temp JobHandle+mem::forget closes store job on Err |
 | etw stop before join | [etw-stop-before-join](etw-stop-before-join/SKILL.md) | Join ETW/WMI consumer before session stop/shutdown |
+| pagefile mb to bytes | [pagefile-mb-to-bytes](pagefile-mb-to-bytes/SKILL.md) | Registry pagefile MB × GiB; Small path dead |
+| tick persist day bucket | [tick-persist-day-bucket](tick-persist-day-bucket/SKILL.md) | Always-on tick rewrites config ~1 Hz |
 
 ## How to add
 

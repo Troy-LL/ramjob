@@ -14,6 +14,8 @@ syncs the HKCU Run key.
 - [ ] Settings menu item no longer a dead stub for autostart
 - [ ] Toggle On → save config + enable Run; Off → save + disable Run
 - [ ] Startup syncs Run key to match loaded `config.autostart`
+- [ ] On config load/startup: call `prune_stale_groups` (ticket 60 Nit) before save-back if pruned
+- [ ] When groups are observed in the app/runtime path, refresh `last_seen_unix` for those keys
 - [ ] Default remains Off for fresh config
 
 ## Verify

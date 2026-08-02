@@ -8,9 +8,8 @@ alwaysApply: true
 
 ## Current milestone
 
-**M6 — Config, autostart, preflight, first-run (shippable)**  
-Prior: M5 closed on `milestone/m5-etw-budget` (thermo + ticket 56 APPROVED `6f1b279`).  
-Do not invent M7 scope; finish M6 then ship.
+**M6 closed — shippable v0** on `milestone/m6-shippable` (thermo + ticket 66 APPROVED `4161e1e`).  
+SPEC §10 M0–M6 complete for local release build. No M7 in SPEC — post-ship = OPEN polish (battery, Chromium auto-backstop, distribution/signing) only when explicitly scoped.
 
 ## Pipeline (every milestone / plan)
 
@@ -93,3 +92,4 @@ When an approach fails or a review/thermo finding costs a redo:
 - 2026-08-03 M3: panel-hide stopped Runtime tick — lesson `always-on-engine-cadence`; M3 closed, M4 opened (user delegated decisions).
 - 2026-08-03 M4: JobHandle+mem::forget closed store job on Err — lesson `handle-forget-closes-job`; M4 closed, M5 opened.
 - 2026-08-03 M5: ETW/WMI join before session stop — lesson `etw-stop-before-join`; SAC Off unblocked verify; M5 closed, M6 opened.
+- 2026-08-03 M6: pagefile MB×GiB (C1), tick config rewrite ~1 Hz (I1) — lessons `pagefile-mb-to-bytes`, `tick-persist-day-bucket`; M6 closed shippable v0.
