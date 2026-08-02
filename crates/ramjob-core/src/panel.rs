@@ -17,6 +17,10 @@ pub struct PanelSnapshot {
     pub overall_limit_bytes: u64,
     pub status_line: String,
     pub warning: bool, // any LOW_YIELD/THRASHING
+    /// True while no per-app caps are set (SPEC §7.3 first-run).
+    pub first_run: bool,
+    /// User-facing §5.4 warnings for the first-run panel (dormancy, pagefile, privilege).
+    pub preflight_notes: Vec<String>,
     pub samples: Vec<SysSample>,
     pub ceiling_edits: Vec<CeilingEdit>,
     pub groups: Vec<PanelGroup>,
@@ -116,6 +120,7 @@ impl PanelState {
         let warning = groups
             .iter()
             .any(|g| g.fsm_hint == "LowYield" || g.fsm_hint == "Thrashing");
+        let first_run = !self.config.groups.iter().any(|g| g.cap_bytes > 0);
 
         PanelSnapshot {
             system_arm: system_arm.to_string(),
@@ -125,6 +130,8 @@ impl PanelState {
             overall_limit_bytes: self.config.overall_limit_bytes,
             status_line,
             warning,
+            first_run,
+            preflight_notes: Vec::new(),
             samples: self.history.samples().to_vec(),
             ceiling_edits: self.history.ceiling_edits().to_vec(),
             groups: groups.to_vec(),
@@ -294,6 +301,30 @@ mod tests {
         }];
         let snap = s.build_snapshot(SystemArm::Armed, 0, 0, &groups);
         assert!(snap.warning);
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn build_snapshot_first_run_when_no_caps() {
+        let path = temp_config_path("first_run");
+        let s = state(path.clone());
+        let snap = s.build_snapshot(SystemArm::Disarmed, 0, 0, &[]);
+        assert!(snap.first_run);
+        assert!(snap.preflight_notes.is_empty());
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn build_snapshot_not_first_run_when_cap_set() {
+        let path = temp_config_path("not_first_run");
+        let mut s = state(path.clone());
+        s.config.groups.push(GroupConfig {
+            key: "hog".into(),
+            cap_bytes: 1 << 30,
+            ..Default::default()
+        });
+        let snap = s.build_snapshot(SystemArm::Disarmed, 0, 0, &[]);
+        assert!(!snap.first_run);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 }

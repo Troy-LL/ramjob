@@ -21,7 +21,7 @@ Prior: **M5 closed** on `milestone/m5-etw-budget` after thermo + ticket 56 APPRO
 | 2 HKCU Run autostart helper | done | `a49f30b`, fix `91465f1` |
 | 3 Startup preflight | done | `3f39944` |
 | 4 Tray Settings autostart wire | done | `9307aee` |
-| 5 First-run + preflight panel copy | pending | |
+| 5 First-run + preflight panel copy | done | `5be1d70` |
 | 6 Verify + ship notes | pending | |
 | 7 Thermo + lessons | pending | |
 

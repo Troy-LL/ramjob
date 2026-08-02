@@ -47,6 +47,8 @@ const MOCK_SNAPSHOT = {
     { key: "spotify", name: "Spotify", gf_bytes: 30 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
     { key: "figma", name: "Figma", gf_bytes: 420 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
   ],
+  first_run: false,
+  preflight_notes: [],
 };
 
 const isTauri = () => typeof window !== "undefined" && !!window.__TAURI__;
@@ -423,18 +425,22 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
   }
 }
 
-// SPEC §7.3: no wizard — just a one-line explainer, shown only while the
-// panel is in its true first-run state (nothing capped yet, few apps visible).
-function renderFirstRunHint(snapshot, _showAll) {
+// SPEC §7.3: no wizard — one-line explainer + §5.4 preflight notes while first_run.
+function renderFirstRunHint(snapshot) {
   const hint = document.getElementById("first-run-hint");
-  const anyCapped = snapshot.groups.some((g) => g.cap_bytes > 0);
-  const totalGb = (snapshot.total_bytes || 0) / GB;
-  hint.textContent =
-    totalGb >= 32
-      ? "Set a cap on any app below to get started — on a high-RAM machine RamJob stays dormant until memory gets tight."
-      : "Set a cap on any app below to get started — RamJob only steps in when memory gets tight.";
-  // SPEC §7.3: one-line explainer while nothing is capped yet.
-  hint.classList.toggle("hidden", anyCapped);
+  const notesEl = document.getElementById("preflight-notes");
+  const firstRun = !!snapshot.first_run;
+  hint.classList.toggle("hidden", !firstRun);
+  if (!firstRun) return;
+
+  const notes = snapshot.preflight_notes ?? [];
+  if (notes.length) {
+    notesEl.textContent = notes.join(" ");
+    notesEl.classList.remove("hidden");
+  } else {
+    notesEl.textContent = "";
+    notesEl.classList.add("hidden");
+  }
 }
 
 function renderStatusLine(snapshot) {
@@ -640,7 +646,7 @@ async function main() {
   const render = () => {
     renderPill(snapshot);
     renderStatusLine(snapshot);
-    renderFirstRunHint(snapshot, showAll);
+    renderFirstRunHint(snapshot);
     renderHeroGauge(snapshot);
     renderAppGrid(
       snapshot,

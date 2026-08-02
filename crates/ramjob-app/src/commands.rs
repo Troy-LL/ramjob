@@ -9,6 +9,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use tauri::State;
 
 use ramjob_core::panel::PanelSnapshot;
+use ramjob_core::preflight;
 
 use crate::clipboard::set_clipboard_text;
 use crate::state::{AppState, AppStateInner};
@@ -22,12 +23,14 @@ fn now_unix_ms() -> u64 {
 }
 
 fn snapshot_from(inner: &AppStateInner) -> PanelSnapshot {
-    inner.panel.build_snapshot(
+    let mut snap = inner.panel.build_snapshot(
         inner.runtime.policy.arm,
         inner.last_used_bytes,
         inner.last_total_bytes,
         &inner.last_groups,
-    )
+    );
+    snap.preflight_notes = preflight::run_once().panel_notes();
+    snap
 }
 
 #[tauri::command]

@@ -92,6 +92,19 @@ body {
   color: #2f4d8f;
 }
 
+.first-run-explainer {
+  margin: 0;
+}
+
+.preflight-notes {
+  margin: 6px 0 0;
+  color: #4a628f;
+}
+
+.preflight-notes.hidden {
+  display: none;
+}
+
 .first-run-hint.hidden {
   display: none;
 }

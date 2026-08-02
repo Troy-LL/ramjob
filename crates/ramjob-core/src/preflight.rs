@@ -76,6 +76,40 @@ impl PreflightReport {
             ring.push(line.clone());
         }
     }
+
+    /// Short §5.4 copy for the §7.3 first-run panel (not the diagnostics dump).
+    pub fn panel_notes(&self) -> Vec<String> {
+        let mut out = Vec::new();
+
+        match &self.pagefile {
+            PagefileStatus::Disabled => out.push(
+                "Pagefile is disabled — soft trim has nowhere to spill; prefer backstop-only \
+                 or a system-managed pagefile."
+                    .into(),
+            ),
+            PagefileStatus::Small { .. } => out.push(
+                "Pagefile is under 1 GB — soft trim spill space is limited; yield may be poor."
+                    .into(),
+            ),
+            _ => {}
+        }
+
+        if self.total_ram_bytes >= HIGH_RAM_THRESHOLD {
+            out.push(
+                "With 32 GB+ RAM, low-memory pressure rarely arms — RamJob will mostly stay \
+                 dormant. That's expected, not a bug."
+                    .into(),
+            );
+        }
+
+        if !self.elevated {
+            out.push(
+                "Not running as administrator — some apps may appear uncappable.".into(),
+            );
+        }
+
+        out
+    }
 }
 
 fn build_notes(total_ram_bytes: u64, pagefile: &PagefileStatus, elevated: bool) -> Vec<String> {
@@ -460,6 +494,40 @@ mod tests {
             elevated: true,
         });
         assert!(!report.notes.iter().any(|n| n.contains("Not elevated")));
+    }
+
+    #[test]
+    fn panel_notes_include_dormancy_and_privilege() {
+        let report = collect_with(&MockProbe {
+            ram: 64 * ONE_GIB,
+            pagefile: Some(8 * ONE_GIB),
+            elevated: false,
+        });
+        let notes = report.panel_notes();
+        assert!(notes.iter().any(|n| n.contains("mostly stay dormant")));
+        assert!(notes.iter().any(|n| n.contains("administrator")));
+        assert!(!notes.iter().any(|n| n.starts_with("Total RAM:")));
+    }
+
+    #[test]
+    fn panel_notes_warn_on_disabled_pagefile() {
+        let report = collect_with(&MockProbe {
+            ram: 16 * ONE_GIB,
+            pagefile: None,
+            elevated: true,
+        });
+        let notes = report.panel_notes();
+        assert!(notes.iter().any(|n| n.contains("Pagefile is disabled")));
+    }
+
+    #[test]
+    fn panel_notes_empty_when_all_clear() {
+        let report = collect_with(&MockProbe {
+            ram: 16 * ONE_GIB,
+            pagefile: Some(8 * ONE_GIB),
+            elevated: true,
+        });
+        assert!(report.panel_notes().is_empty());
     }
 
     #[test]
