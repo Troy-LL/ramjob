@@ -24,7 +24,7 @@ Verify: doctor ok; `cargo test --workspace` green; `ramjob-app` builds.
 | 4 Runtime wire-up | done | `a199c1b` |
 | 5 Hog integration verify | done | `bcf9fb8` |
 | 6 Panel warning + SPEC | done | `67726f0` |
-| 7 Thermo + lessons | pending | |
+| 7 Thermo + lessons | done | `b9e2bba` |
 
 Design: `docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`  
 Plan: `docs/superpowers/plans/2026-08-03-m4-job-object-backstop.md`

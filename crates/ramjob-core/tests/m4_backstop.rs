@@ -1,29 +1,27 @@
 //! M4 Task 5 — Job Object backstop integration verify.
 //!
 //! Live hog + Win32 paths where reliable; mock hooks for arm/drop proof.
-//! Task-43 tick-path regression: `runtime::tests::tick_with_groups_soft_trim_follow_backstop_arms_mock_store`
-//! (stub trim; arms on `observe_post_trim` follow, not `arm_backstop_if_ready_for_test`).
+//! Tick-path regression: `runtime_backstop::tests::tick_with_groups_soft_trim_follow_backstop_arms_mock_store`.
 //! Drop without `TerminateJobObject`: `job_backstop::tests::drop_closes_jobs_without_terminate`.
 
-use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::process::{Child, Command};
-use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
 use ramjob_core::commit_ratio::{translate_job_limit, MIN_SAMPLES};
 use ramjob_core::config::{GroupConfig, RamjobConfig};
 use ramjob_core::grouper::{group_processes, AppGroup, GroupMember};
+use ramjob_core::job_backstop::mock::MockBackstopHooks;
 use ramjob_core::job_backstop::{
-    pack_job_memory_limit, BackstopError, BackstopHooks, FORBIDDEN_LIMIT_FLAGS,
-    JobBackstopStore, JobHandle, PackedJobLimit,
+    pack_job_memory_limit, FORBIDDEN_LIMIT_FLAGS, JobBackstopStore, JobLimitState,
 };
 use ramjob_core::policy::SystemArm;
 use ramjob_core::runtime::Runtime;
 use ramjob_core::scanner::{enumerate_processes_with_cache, PathCache};
 
-fn workspace_debug_bin(name: &str) -> PathBuf {    let mut exe = name.to_string();
+fn workspace_debug_bin(name: &str) -> PathBuf {
+    let mut exe = name.to_string();
     if cfg!(windows) && !exe.ends_with(".exe") {
         exe.push_str(".exe");
     }
@@ -104,89 +102,6 @@ fn synthetic_group(key: &str, pid: u32, gf: u64, commit: u64) -> AppGroup {
     }
 }
 
-// --- Mock hooks (integration-level arm/drop proof) ---
-
-struct MockJob {
-    memory_limit: Option<u64>,
-    assigned: HashSet<u32>,
-    closed: bool,
-}
-
-struct RecordingMockHooks {
-    jobs: Arc<Mutex<HashMap<usize, MockJob>>>,
-    next_id: Mutex<usize>,
-}
-
-impl RecordingMockHooks {
-    fn new() -> Self {
-        Self {
-            jobs: Arc::new(Mutex::new(HashMap::new())),
-            next_id: Mutex::new(1),
-        }
-    }
-
-    fn job_id(handle: &JobHandle) -> usize {
-        handle.0 .0 as usize
-    }
-}
-
-impl BackstopHooks for RecordingMockHooks {
-    fn create_job(&self) -> Result<JobHandle, BackstopError> {
-        let mut next = self.next_id.lock().unwrap();
-        let id = *next;
-        *next += 1;
-        self.jobs.lock().unwrap().insert(
-            id,
-            MockJob {
-                memory_limit: None,
-                assigned: HashSet::new(),
-                closed: false,
-            },
-        );
-        Ok(JobHandle(windows::Win32::Foundation::HANDLE(
-            id as *mut core::ffi::c_void,
-        )))
-    }
-
-    fn assign_process(&self, job: &JobHandle, pid: u32) -> Result<(), BackstopError> {
-        let id = Self::job_id(job);
-        self.jobs
-            .lock()
-            .unwrap()
-            .get_mut(&id)
-            .ok_or_else(|| BackstopError("unknown job".into()))?
-            .assigned
-            .insert(pid);
-        Ok(())
-    }
-
-    fn apply_packed_limit(
-        &self,
-        job: &JobHandle,
-        packed: PackedJobLimit,
-    ) -> Result<(), BackstopError> {
-        let id = Self::job_id(job);
-        let mut jobs = self.jobs.lock().unwrap();
-        let entry = jobs
-            .get_mut(&id)
-            .ok_or_else(|| BackstopError("unknown job".into()))?;
-        entry.memory_limit = if packed.job_memory_limit > 0 {
-            Some(packed.job_memory_limit)
-        } else {
-            None
-        };
-        Ok(())
-    }
-
-    fn close_job(&self, job: JobHandle) {
-        let id = Self::job_id(&job);
-        if let Some(entry) = self.jobs.lock().unwrap().get_mut(&id) {
-            entry.closed = true;
-        }
-        std::mem::forget(job);
-    }
-}
-
 #[test]
 fn pack_never_sets_kill_on_job_close() {
     for limit in [None, Some(1), Some(4 * 1024 * 1024 * 1024)] {
@@ -201,8 +116,8 @@ fn pack_never_sets_kill_on_job_close() {
 
 #[test]
 fn mock_store_arm_assign_limit_and_drop() {
-    let hooks = RecordingMockHooks::new();
-    let jobs = Arc::clone(&hooks.jobs);
+    let hooks = MockBackstopHooks::new();
+    let hooks_watch = hooks.clone();
 
     let cap = 50_000_000u64;
     let ratio = 1.5;
@@ -216,16 +131,15 @@ fn mock_store_arm_assign_limit_and_drop() {
         store.set_memory_limit(group, limit).unwrap();
         assert!(store.has_group(group));
         assert!(store.assigned_pids(group).unwrap().contains(&pid));
-        assert_eq!(store.memory_limit(group), Some(Some(limit)));
+        assert_eq!(store.memory_limit(group), JobLimitState::Limited(limit));
     }
 
-    let guard = jobs.lock().unwrap();
-    assert_eq!(guard.len(), 1);
-    let job = guard.values().next().unwrap();
-    assert!(job.closed, "Drop must close handle via close_job, not TerminateJobObject");
-    assert!(job.assigned.contains(&pid));
-    assert_eq!(job.memory_limit, Some(limit));
-    drop(guard);
+    let snaps = hooks_watch.job_snapshots();
+    assert_eq!(snaps.len(), 1);
+    let (closed, mem, assigned) = &snaps[0];
+    assert!(*closed, "Drop must close handle via close_job, not TerminateJobObject");
+    assert!(assigned.contains(&pid));
+    assert_eq!(*mem, Some(limit));
 }
 
 #[test]
@@ -247,7 +161,6 @@ fn runtime_pressure_ticks_sample_without_backstop_arm() {
     let mut rt = Runtime::new();
     let t0 = Instant::now();
 
-    // Pressure-range GF samples commit_ratio; no trim/backstop without over-cap escalation.
     for i in 0..MIN_SAMPLES {
         let gf = (0.90 * cap as f64) as u64;
         let apps = vec![synthetic_group(key, pid, gf, gf * 2)];
