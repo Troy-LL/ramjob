@@ -8,7 +8,7 @@ mod state;
 use std::collections::HashMap;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
-use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
 
@@ -21,10 +21,13 @@ use ramjob_core::panel::PanelGroup;
 use ramjob_core::policy::SystemArm;
 use ramjob_core::sys_history::SysSample;
 
-use state::{AppState, AppStateInner};
+use state::{AppState, AppStateInner, now_unix_secs, set_autostart, touch_observed_groups};
 
 /// Tray menu pause item — shared between tray handler and `pause_all` IPC.
 pub struct TrayPauseItem(pub MenuItem<tauri::Wry>);
+
+/// Tray Settings → Autostart check item.
+pub struct TrayAutostartItem(pub CheckMenuItem<tauri::Wry>);
 
 pub fn sync_pause_menu_label(item: &MenuItem<tauri::Wry>, pause_all: bool) {
     let _ = item.set_text(if pause_all { "Resume" } else { "Pause all" });
@@ -138,6 +141,20 @@ fn run_tick(state: &AppState, app_handle: &AppHandle) {
 
         *last_groups = build_panel_groups(&outcome.apps, &runtime.groups, &config);
 
+        let observed: Vec<String> = outcome
+            .apps
+            .iter()
+            .map(|app| app.group_key.clone())
+            .collect();
+        let config_path = panel.config_path.clone();
+        if let Err(e) =
+            touch_observed_groups(&config_path, &mut panel.config, &observed, now_unix_secs())
+        {
+            runtime
+                .diagnostics
+                .push(format!("touch_observed_groups failed: {e}"));
+        }
+
         let warning = last_groups
             .iter()
             .any(|g| matches!(g.fsm_hint.as_str(), "LowYield" | "Thrashing"));
@@ -194,21 +211,40 @@ fn main() {
         ])
         .setup(|app| {
             let app_state = AppState::new().expect("load RamJob config");
+            let autostart_on = app_state
+                .0
+                .lock()
+                .map(|inner| inner.panel.config.autostart)
+                .unwrap_or(false);
             app.manage(app_state);
             spawn_tick_loop(app.handle().clone());
 
             let pause_item = MenuItem::with_id(app, "pause", "Pause all", true, None::<&str>)?;
             app.manage(TrayPauseItem(pause_item.clone()));
             let open_item = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
-            let settings_item =
-                MenuItem::with_id(app, "settings", "Settings", false, None::<&str>)?;
+            let autostart_item = CheckMenuItem::with_id(
+                app,
+                "autostart",
+                "Start with Windows",
+                true,
+                autostart_on,
+                None::<&str>,
+            )?;
+            app.manage(TrayAutostartItem(autostart_item.clone()));
+            let settings_menu = Submenu::with_id_and_items(
+                app,
+                "settings",
+                "Settings",
+                true,
+                &[&autostart_item],
+            )?;
             let quit_item = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
             let menu = Menu::with_items(
                 app,
                 &[
                     &pause_item,
                     &open_item,
-                    &settings_item,
+                    &settings_menu,
                     &PredefinedMenuItem::separator(app)?,
                     &quit_item,
                 ],
@@ -252,6 +288,38 @@ fn main() {
                         "open" => {
                             if let Some(window) = app.get_webview_window("main") {
                                 show_panel(&window);
+                            }
+                        }
+                        "autostart" => {
+                            if let Ok(mut inner) = state.inner().0.lock() {
+                                let next = !inner.panel.config.autostart;
+                                let config_path = inner.panel.config_path.clone();
+                                match set_autostart(
+                                    &config_path,
+                                    &mut inner.panel.config,
+                                    next,
+                                ) {
+                                    Ok(()) => {
+                                        if let Some(tray_autostart) =
+                                            app.try_state::<TrayAutostartItem>()
+                                        {
+                                            let _ = tray_autostart.0.set_checked(next);
+                                        }
+                                    }
+                                    Err(e) => {
+                                        inner
+                                            .runtime
+                                            .diagnostics
+                                            .push(format!("set_autostart failed: {e}"));
+                                        if let Some(tray_autostart) =
+                                            app.try_state::<TrayAutostartItem>()
+                                        {
+                                            let _ = tray_autostart
+                                                .0
+                                                .set_checked(inner.panel.config.autostart);
+                                        }
+                                    }
+                                }
                             }
                         }
                         "quit" => app.exit(0),
