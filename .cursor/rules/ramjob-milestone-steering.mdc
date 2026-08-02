@@ -1,4 +1,4 @@
----
+﻿---
 description: RamJob milestone steering — brainstorm, SPEC, SDD, poteto, thermo
 globs:
 alwaysApply: true
@@ -8,9 +8,9 @@ alwaysApply: true
 
 ## Current milestone
 
-**M4 — Job Object backstop (opt-in, §3.2)**  
-Prior: M3 closed on `milestone/m3-thermo-fix` (thermo + ticket 30 APPROVED; UX path agreed by user-delegated autonomous run 2026-08-03).  
-M0 formal 3-machine corpus = ongoing user testing. Do not start M5 until M4 thermo Critical/Important = 0.
+**M5 — ETW discovery, adaptive polling, budget CI**  
+Prior: M4 closed on `milestone/m4-job-backstop` (thermo + ticket 46 APPROVED `7c1a0a0`).  
+Do not start M6 until M5 thermo Critical/Important = 0.
 
 ## Pipeline (every milestone / plan)
 
@@ -89,5 +89,6 @@ When an approach fails or a review/thermo finding costs a redo:
 - 2026-07-27 process: encode brainstorm→recommend-first→SPEC→plans→SDD/poteto→thermo; SPEC must stay untruncated SOT.
 - 2026-07-27 M1: trim_lock before settle; dual ΔGF — lesson `trim-lock-covers-settle`.
 - 2026-07-27 M0: global PathCache / LNK1181 — lessons `no-premature-global-cache`, `windows-msvc-sdk-env`.
-- 2026-07-27 M2: runtime duplicated §2.3 measure + stubbed FSM inputs — lesson `single-measure-owner`; WinPressure ARM uses `assume_faults_when_low` until real fault counter ships.- 2026-07-27: open M3 with M0 multi-machine corpus as ongoing user testing (SPEC �10 proceed note); M1 Pass.
+- 2026-07-27 M2: runtime duplicated §2.3 measure + stubbed FSM inputs — lesson `single-measure-owner`; WinPressure ARM uses `assume_faults_when_low` until real fault counter ships.- 2026-07-27: open M3 with M0 multi-machine corpus as ongoing user testing (SPEC �10 proceed note); M1 Pass.
 - 2026-08-03 M3: panel-hide stopped Runtime tick — lesson `always-on-engine-cadence`; M3 closed, M4 opened (user delegated decisions).
+- 2026-08-03 M4: JobHandle+mem::forget closed store job on Err — lesson `handle-forget-closes-job`; M4 closed, M5 opened.

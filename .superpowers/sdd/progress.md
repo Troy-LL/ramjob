@@ -1,30 +1,28 @@
 # SDD progress — RamJob
 
-Milestone: **M4** (Job Object backstop) — starting  
-Prior: **M3 closed** on `milestone/m3-thermo-fix` after thermo + ticket 30.
+Milestone: **M5** (ETW + adaptive + budget CI) — starting  
+Prior: **M4 closed** on `milestone/m4-job-backstop` after thermo + ticket 46 APPROVED (`7c1a0a0`).
 
-## M3 closeout
+## M4 closeout
 
 | Item | Status |
 |---|---|
-| Design + plan + tray UI | done (merged PR #1 + parity) |
-| Thermo CQ | done — [Thermo](b7af3b7f-0ef2-48ac-a9f9-6ddb18247688): Crit 2 / Imp 5 |
-| Ticket 30 thermo fixes | done `afc0166` — review APPROVED |
-| Lesson | `always-on-engine-cadence` (panel visibility ≠ stop engine) |
+| Tasks 1–6 | done |
+| Thermo | Crit 1 / Imp 5 → fixed ticket 46 |
+| Ticket 46 review | APPROVED |
+| Lessons | `handle-forget-closes-job` |
 
-Verify: doctor ok; `cargo test --workspace` green; `ramjob-app` builds.
-
-## M4 tasks
+## M5 tasks
 
 | Task | Status | Commit |
 |---|---|---|
-| 1 commit_ratio math | done | `ada36db` |
-| 2 job_backstop store | done | `9115f64` |
-| 3 FSM Backstop action | done | `9d939bd` |
-| 4 Runtime wire-up | done | `a199c1b` |
-| 5 Hog integration verify | done | `bcf9fb8` |
-| 6 Panel warning + SPEC | done | `67726f0` |
-| 7 Thermo + lessons | done | `b9e2bba` |
+| 1 DiscoverySource + sweep | pending | |
+| 2 ETW backend | pending | |
+| 3 WMI fallback | pending | |
+| 4 Adaptive sleep | pending | |
+| 5 Runtime discovery deltas | pending | |
+| 6 Budget CI harness | pending | |
+| 7 Thermo + lessons | pending | |
 
-Design: `docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`  
-Plan: `docs/superpowers/plans/2026-08-03-m4-job-object-backstop.md`
+Design: `docs/superpowers/specs/2026-08-03-m5-etw-adaptive-budget-design.md`  
+Plan: `docs/superpowers/plans/2026-08-03-m5-etw-adaptive-budget.md`
