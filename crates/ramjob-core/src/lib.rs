@@ -4,6 +4,7 @@ pub mod commit_ratio;
 pub mod config;
 pub mod job_backstop;
 pub mod diagnostics;
+pub mod discovery;
 pub mod enforcer;
 pub mod fsm;
 pub mod gate;
