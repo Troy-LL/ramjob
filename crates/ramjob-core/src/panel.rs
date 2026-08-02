@@ -47,6 +47,7 @@ impl PanelState {
             key: key.to_string(),
             cap_bytes: 0,
             always_enforce: false,
+            ..Default::default()
         });
         self.config.groups.last_mut().expect("just pushed")
     }
@@ -148,13 +149,7 @@ mod tests {
     }
 
     fn empty_config() -> RamjobConfig {
-        RamjobConfig {
-            version: 2,
-            runaway_multiplier: 3.0,
-            overall_limit_bytes: 0,
-            groups: vec![],
-            pause_all: false,
-        }
+        RamjobConfig::default()
     }
 
     fn state(path: PathBuf) -> PanelState {
@@ -205,6 +200,7 @@ mod tests {
             key: "hog".into(),
             cap_bytes: 1 << 30,
             always_enforce: true,
+            ..Default::default()
         });
         s.set_cap("hog", 4 * 1024 * 1024 * 1024, false, None)
             .unwrap();

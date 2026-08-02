@@ -160,6 +160,7 @@ mod tests {
             key: "hog".into(),
             cap_bytes: cap,
             always_enforce: true,
+            ..Default::default()
         }
     }
 
@@ -216,6 +217,7 @@ mod tests {
             overall_limit_bytes: 0,
             groups: vec![hog_group(cap)],
             pause_all: false,
+            ..Default::default()
         };
         let app = app(key, pid, gf, commit);
         let t0 = Instant::now();
@@ -377,6 +379,7 @@ mod tests {
             overall_limit_bytes: 0,
             groups: vec![gc],
             pause_all: false,
+            ..Default::default()
         };
         rt.tick_with_groups(&cfg, SystemArm::Disarmed, &[app], Instant::now())
             .unwrap();

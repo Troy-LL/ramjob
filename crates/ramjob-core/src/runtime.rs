@@ -441,6 +441,7 @@ mod tests {
             overall_limit_bytes: 0,
             groups: vec![],
             pause_all: false,
+            ..Default::default()
         };
         let mut pressure = SimulatedPressure {
             low_memory: false,
@@ -461,8 +462,10 @@ mod tests {
                 key: "hog".into(),
                 cap_bytes: 100,
                 always_enforce: false,
+                ..Default::default()
             }],
             pause_all: false,
+            ..Default::default()
         };
         let mut rt = Runtime::new_inert();
         let now = Instant::now();
@@ -550,8 +553,10 @@ mod tests {
                 key: "hog".into(),
                 cap_bytes: cap,
                 always_enforce: true,
+                ..Default::default()
             }],
             pause_all: false,
+            ..Default::default()
         };
         let mut rt = Runtime::new_inert();
         let apps = vec![crate::grouper::AppGroup {
