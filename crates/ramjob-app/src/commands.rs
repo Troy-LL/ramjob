@@ -32,7 +32,7 @@ fn snapshot_from(inner: &AppStateInner) -> PanelSnapshot {
 
 #[tauri::command]
 pub fn get_snapshot(state: State<AppState>) -> Result<PanelSnapshot, String> {
-    let inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    let inner = state.inner().0.lock().map_err(|_| "state poisoned".to_string())?;
     Ok(snapshot_from(&inner))
 }
 
@@ -43,7 +43,7 @@ pub fn set_cap(
     cap_bytes: u64,
     shift_fine: bool,
 ) -> Result<PanelSnapshot, String> {
-    let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    let mut inner = state.inner().0.lock().map_err(|_| "state poisoned".to_string())?;
     // SPEC §7.5/§8.2 wants a real 24h median floor input; that histogram is
     // out of M3 scope, so pass None here to use apply_cap_floor's flat
     // 300MB (FLOOR_FLAT_BYTES) fallback rather than an instantaneous GF
@@ -58,7 +58,7 @@ pub fn set_overall_limit(
     limit_bytes: u64,
     shift_fine: bool,
 ) -> Result<PanelSnapshot, String> {
-    let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    let mut inner = state.inner().0.lock().map_err(|_| "state poisoned".to_string())?;
     inner
         .panel
         .set_overall_limit(limit_bytes, now_unix_ms(), shift_fine)?;
@@ -71,7 +71,7 @@ pub fn set_flags(
     key: String,
     always_enforce: bool,
 ) -> Result<PanelSnapshot, String> {
-    let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    let mut inner = state.inner().0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_flags(&key, always_enforce)?;
     Ok(snapshot_from(&inner))
 }
@@ -82,7 +82,7 @@ pub fn pause_all(
     pause: bool,
     tray_pause: State<TrayPauseItem>,
 ) -> Result<PanelSnapshot, String> {
-    let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    let mut inner = state.inner().0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_pause_all(pause)?;
     sync_pause_menu_label(&tray_pause.0, pause);
     Ok(snapshot_from(&inner))
@@ -90,7 +90,7 @@ pub fn pause_all(
 
 #[tauri::command]
 pub fn copy_diagnostics(state: State<AppState>) -> Result<(), String> {
-    let inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
+    let inner = state.inner().0.lock().map_err(|_| "state poisoned".to_string())?;
     let text = inner.panel.diagnostics_text(&inner.runtime.diagnostics);
     set_clipboard_text(&text)
 }

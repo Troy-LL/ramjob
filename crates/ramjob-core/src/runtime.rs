@@ -9,7 +9,8 @@ use crate::diagnostics::DiagnosticsRing;
 use crate::enforcer::{
     ExclusionPolicy, LiveTrimHooks, TRIM_RATE_LIMIT, TrimContext,
 };
-use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput};
+use crate::adaptive::hottest_phase;
+use crate::fsm::{FsmAction, GroupFsm, GroupFsmInput, GroupPhase};
 use crate::gate::{run_gate_on_group, GateMeasurement, GATE_SETTLE};
 use crate::grouper::AppGroup;
 use crate::job_backstop::JobBackstopStore;
@@ -96,6 +97,16 @@ impl Runtime {
 
     pub fn force_arm_for_test(&mut self) {
         self.policy.arm = SystemArm::Armed;
+    }
+
+    /// Max FSM phase across configured groups (for adaptive sleep).
+    pub fn hottest_group_phase(&self) -> Option<GroupPhase> {
+        hottest_phase(self.groups.values().map(|g| g.phase))
+    }
+
+    /// Whether any Job Object backstop limit is armed.
+    pub fn backstop_active(&self) -> bool {
+        self.backstop.any_limited()
     }
 
     pub fn tick(

@@ -1,3 +1,4 @@
+pub mod adaptive;
 pub mod accountant;
 pub mod cap_math;
 pub mod commit_ratio;

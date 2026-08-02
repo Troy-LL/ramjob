@@ -69,7 +69,7 @@ fn extended_limit_from_packed(packed: PackedJobLimit) -> JOBOBJECT_EXTENDED_LIMI
 pub struct BackstopError(pub String);
 
 /// Injectable OS surface for unit tests.
-pub trait BackstopHooks {
+pub trait BackstopHooks: Send + Sync {
     fn create_job(&self) -> Result<JobHandle, BackstopError>;
     fn assign_process(&self, job: &JobHandle, pid: u32) -> Result<(), BackstopError>;
     fn apply_packed_limit(
@@ -83,6 +83,10 @@ pub trait BackstopHooks {
 /// Owning job handle; closed on drop without `TerminateJobObject`.
 #[derive(Debug)]
 pub struct JobHandle(pub HANDLE);
+
+// Win32 HANDLE is an opaque token; synchronized via `JobBackstopStore` / app `Mutex`.
+unsafe impl Send for JobHandle {}
+unsafe impl Sync for JobHandle {}
 
 impl Drop for JobHandle {
     fn drop(&mut self) {

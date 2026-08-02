@@ -6,12 +6,13 @@ mod commands;
 mod state;
 
 use std::collections::HashMap;
-use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Manager, WindowEvent};
 
+use ramjob_core::adaptive::next_sleep;
 use ramjob_core::accountant::group_footprint;
 use ramjob_core::fsm::{GroupFsm, GroupPhase};
 use ramjob_core::gate::phys_memory;
@@ -152,7 +153,7 @@ fn run_tick(state: &AppState, app_handle: &AppHandle) {
 const TRAY_ID: &str = "main-tray";
 
 /// Background loop: always runs `Runtime::tick`. Panel open → 1 s cadence;
-/// closed → 30 s when Armed, 120 s when Disarmed (SPEC §6.1).
+/// closed → adaptive ladder per SPEC §6.1 (arm + hottest group phase).
 fn spawn_tick_loop(app_handle: AppHandle) {
     std::thread::spawn(move || {
         loop {
@@ -162,19 +163,21 @@ fn spawn_tick_loop(app_handle: AppHandle) {
                 .unwrap_or(false);
 
             let state = app_handle.state::<AppState>();
-            run_tick(&state, &app_handle);
+            run_tick(state.inner(), &app_handle);
 
-            let sleep_secs = if panel_open {
-                1
-            } else {
-                let armed = state
-                    .0
-                    .lock()
-                    .map(|inner| inner.runtime.policy.arm == SystemArm::Armed)
-                    .unwrap_or(false);
-                if armed { 30 } else { 120 }
+            let sleep = {
+                let guard = state.inner().0.lock().ok();
+                match guard {
+                    Some(inner) => next_sleep(
+                        inner.runtime.policy.arm,
+                        inner.runtime.hottest_group_phase(),
+                        panel_open,
+                        inner.runtime.backstop_active(),
+                    ),
+                    None => next_sleep(SystemArm::Disarmed, None, panel_open, false),
+                }
             };
-            std::thread::sleep(Duration::from_secs(sleep_secs));
+            std::thread::sleep(sleep);
         }
     });
 }
@@ -227,7 +230,7 @@ fn main() {
                     let state = app.state::<AppState>();
                     match event.id().as_ref() {
                         "pause" => {
-                            if let Ok(mut inner) = state.0.lock() {
+                            if let Ok(mut inner) = state.inner().0.lock() {
                                 let next = !inner.panel.config.pause_all;
                                 match inner.panel.set_pause_all(next) {
                                     Ok(()) => {
