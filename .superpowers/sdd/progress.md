@@ -23,7 +23,7 @@ Verify: doctor ok; `cargo test --workspace` green; `ramjob-app` builds.
 | 3 FSM Backstop action | done | `9d939bd` |
 | 4 Runtime wire-up | done | `a199c1b` |
 | 5 Hog integration verify | pending | |
-| 6 Panel warning + SPEC | pending | |
+| 6 Panel warning + SPEC | done | `170f892` |
 | 7 Thermo + lessons | pending | |
 
 Design: `docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`  

@@ -4,6 +4,10 @@
 const MIN_GF_BYTES = 50 * 1024 * 1024; // 50 MB "Show all apps" floor
 const GB = 1024 * 1024 * 1024;
 
+// SPEC §7.4 — shown when enabling hard backstop (always_enforce).
+const BACKSTOP_WARNING =
+  "If this app can't handle running out of memory, it may crash or lose unsaved work.";
+
 // Build some fake history: 30 samples over the last ~15 minutes, wobbling
 // around 8-11 GB used out of 16 GB total, with one ceiling edit partway
 // through (14 GB -> 12 GB) to exercise stepped-ceiling rendering.
@@ -158,6 +162,9 @@ const capDragPreview = {}; // key -> { bytes, dialMax }
 function honestMessage(fsmHint, group) {
   if (group && group.cap_bytes > 0 && group.gf_bytes > group.cap_bytes) {
     return `${group.name} is using ${formatBytes(group.gf_bytes)}. Capping at ${formatBytes(group.cap_bytes)} will push memory out of RAM and may make it feel slower.`;
+  }
+  if (group && group.always_enforce) {
+    return BACKSTOP_WARNING;
   }
   if (fsmHint === "LowYield") {
     return "Capping this isn't freeing much — Windows is compressing the memory rather than releasing it. Raising the cap won't cost you much.";
@@ -400,6 +407,12 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
     });
     label.append(checkbox, document.createTextNode(" Always enforce (hard backstop)"));
     popover.appendChild(label);
+    if (g.always_enforce) {
+      const backstopWarn = document.createElement("div");
+      backstopWarn.className = "gear-backstop-warning";
+      backstopWarn.textContent = BACKSTOP_WARNING;
+      popover.appendChild(backstopWarn);
+    }
     card.appendChild(popover);
 
     gearBtn.addEventListener("click", () => {

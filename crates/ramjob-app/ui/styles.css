@@ -245,6 +245,15 @@ body {
   display: none;
 }
 
+.gear-backstop-warning {
+  font-size: 10px;
+  color: #c62828;
+  line-height: 1.3;
+  margin-top: 6px;
+  max-width: 200px;
+  white-space: normal;
+}
+
 /* Footer */
 .panel-footer {
   display: flex;
