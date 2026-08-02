@@ -23,7 +23,7 @@ Prior: **M5 closed** on `milestone/m5-etw-budget` after thermo + ticket 56 APPRO
 | 4 Tray Settings autostart wire | done | `9307aee` |
 | 5 First-run + preflight panel copy | done | `4aa0114` |
 | 6 Verify + ship notes | done | `bde1257` |
-| 7 Thermo + lessons | done | _(commit SHA below)_ |
+| 7 Thermo + lessons | done | `4161e1e` |
 
 Design: `docs/superpowers/specs/2026-08-03-m6-shippable-design.md`  
 Plan: `docs/superpowers/plans/2026-08-03-m6-shippable.md`
