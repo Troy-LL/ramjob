@@ -14,12 +14,20 @@ use tauri::{AppHandle, Manager, WindowEvent};
 
 use ramjob_core::accountant::group_footprint;
 use ramjob_core::fsm::{GroupFsm, GroupPhase};
-use ramjob_core::grouper::{group_processes, AppGroup};
+use ramjob_core::gate::phys_memory;
+use ramjob_core::grouper::AppGroup;
 use ramjob_core::panel::PanelGroup;
-use ramjob_core::scanner::{enumerate_processes_with_cache, PathCache};
+use ramjob_core::policy::SystemArm;
 use ramjob_core::sys_history::SysSample;
 
-use state::AppState;
+use state::{AppState, AppStateInner};
+
+/// Tray menu pause item — shared between tray handler and `pause_all` IPC.
+pub struct TrayPauseItem(pub MenuItem<tauri::Wry>);
+
+pub fn sync_pause_menu_label(item: &MenuItem<tauri::Wry>, pause_all: bool) {
+    let _ = item.set_text(if pause_all { "Resume" } else { "Pause all" });
+}
 
 fn show_panel(window: &tauri::WebviewWindow) {
     let _ = window.show();
@@ -31,22 +39,6 @@ fn now_unix_ms() -> u64 {
         .duration_since(UNIX_EPOCH)
         .unwrap_or_default()
         .as_millis() as u64
-}
-
-/// Total/used physical RAM via `GlobalMemoryStatusEx` (same API `ramjob-core`'s
-/// gate module already links against — no new dependency).
-fn system_memory() -> Result<(u64, u64), String> {
-    use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
-    unsafe {
-        let mut status = MEMORYSTATUSEX {
-            dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
-            ..Default::default()
-        };
-        GlobalMemoryStatusEx(&mut status).map_err(|e| format!("GlobalMemoryStatusEx: {e}"))?;
-        let total = status.ullTotalPhys;
-        let used = total.saturating_sub(status.ullAvailPhys);
-        Ok((total, used))
-    }
 }
 
 fn phase_str(phase: GroupPhase) -> &'static str {
@@ -65,7 +57,7 @@ fn basename(key: &str) -> String {
 
 /// Build the panel's group list from live enumeration + FSM phases.
 ///
-/// Do **not** apply the CLI ≥50 MB GF floor here — the WebView filters that
+/// Do **not** apply the CLI ≥50 MB GF floor here — the WebView filters that
 /// for the default view and "Show all apps" must still receive sub-floor
 /// groups (SPEC §7.2). Caps/always_enforce come from config when present.
 fn build_panel_groups(
@@ -89,7 +81,6 @@ fn build_panel_groups(
                 cap_bytes: gc.map(|g| g.cap_bytes).unwrap_or(0),
                 always_enforce: gc.map(|g| g.always_enforce).unwrap_or(false),
                 fsm_hint,
-                honest: None,
             }
         })
         .collect()
@@ -111,60 +102,48 @@ fn tray_tooltip(used: u64, total: u64, armed: bool, warning: bool) -> String {
     format!("RamJob — {used_gb:.1}/{total_gb:.1} GB — {state}")
 }
 
-/// One tick: sample pressure, enumerate processes, run the FSM/enforcer step,
-/// record a system-memory history sample, and refresh the cached snapshot
-/// inputs commands read from.
-///
-/// The state lock is only held for the short pressure-sample/FSM steps —
-/// `enumerate_processes_with_cache`/`group_processes` (which don't touch
-/// shared state) run unlocked in between, so a slow enumeration can't stall
-/// an IPC command (get_snapshot, set_cap, ...) waiting on the same mutex.
-fn run_tick(state: &AppState, path_cache: &mut PathCache, app_handle: &AppHandle) {
+/// One tick: `Runtime::tick` (pressure + enumerate + FSM), history sample,
+/// panel group cache, and tray tooltip refresh.
+fn run_tick(state: &AppState, app_handle: &AppHandle) {
     let now = Instant::now();
 
-    let (system, config) = {
-        let Ok(mut inner) = state.0.lock() else {
+    let tooltip = {
+        let Ok(mut guard) = state.0.lock() else {
             return;
         };
-        let Ok(sample) = inner.pressure.sample() else {
+        let AppStateInner {
+            runtime,
+            pressure,
+            panel,
+            last_used_bytes,
+            last_total_bytes,
+            last_groups,
+        } = &mut *guard;
+        let config = panel.config.clone();
+        let Ok(outcome) = runtime.tick(&config, pressure.as_mut(), now) else {
             return;
         };
-        let system = inner.runtime.policy.update(sample);
-        (system, inner.panel.config.clone())
+
+        if let Ok((total, avail)) = phys_memory() {
+            let used = total.saturating_sub(avail);
+            *last_total_bytes = total;
+            *last_used_bytes = used;
+            panel.history.push_sample(SysSample {
+                unix_ms: now_unix_ms(),
+                used_bytes: used,
+                total_bytes: total,
+            });
+        }
+
+        *last_groups = build_panel_groups(&outcome.apps, &runtime.groups, &config);
+
+        let warning = last_groups
+            .iter()
+            .any(|g| matches!(g.fsm_hint.as_str(), "LowYield" | "Thrashing"));
+        let armed = runtime.policy.arm == SystemArm::Armed;
+        tray_tooltip(*last_used_bytes, *last_total_bytes, armed, warning)
     };
 
-    let Ok(procs) = enumerate_processes_with_cache(path_cache) else {
-        return;
-    };
-    let apps = group_processes(&procs);
-
-    let Ok(mut inner) = state.0.lock() else {
-        return;
-    };
-    let _ = inner.runtime.tick_with_groups(&config, system, &apps, now);
-
-    if let Ok((total, used)) = system_memory() {
-        inner.last_total_bytes = total;
-        inner.last_used_bytes = used;
-        inner.panel.history.push_sample(SysSample {
-            unix_ms: now_unix_ms(),
-            used_bytes: used,
-            total_bytes: total,
-        });
-    }
-
-    inner.last_groups = build_panel_groups(&apps, &inner.runtime.groups, &inner.panel.config);
-
-    let warning = inner.last_groups.iter().any(|g| {
-        matches!(g.fsm_hint.as_str(), "LowYield" | "Thrashing")
-    });
-    let tooltip = tray_tooltip(
-        inner.last_used_bytes,
-        inner.last_total_bytes,
-        inner.runtime.policy.arm == ramjob_core::policy::SystemArm::Armed,
-        warning,
-    );
-    drop(inner);
     if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {
         let _ = tray.set_tooltip(Some(&tooltip));
     }
@@ -172,50 +151,32 @@ fn run_tick(state: &AppState, path_cache: &mut PathCache, app_handle: &AppHandle
 
 const TRAY_ID: &str = "main-tray";
 
-/// Background loop: full enumerate/FSM tick while the panel is open; when
-/// closed, still refresh the tray tooltip from a cheap memory sample so the
-/// icon is not frozen at the last open-panel reading (L3 grill).
+/// Background loop: always runs `Runtime::tick`. Panel open → 1 s cadence;
+/// closed → 30 s when Armed, 120 s when Disarmed (SPEC §6.1).
 fn spawn_tick_loop(app_handle: AppHandle) {
     std::thread::spawn(move || {
-        let mut path_cache = PathCache::new();
         loop {
-            std::thread::sleep(Duration::from_secs(1));
-            let Some(window) = app_handle.get_webview_window("main") else {
-                continue;
-            };
+            let panel_open = app_handle
+                .get_webview_window("main")
+                .map(|w| w.is_visible().unwrap_or(false))
+                .unwrap_or(false);
+
             let state = app_handle.state::<AppState>();
-            if window.is_visible().unwrap_or(false) {
-                run_tick(&state, &mut path_cache, &app_handle);
+            run_tick(&state, &app_handle);
+
+            let sleep_secs = if panel_open {
+                1
             } else {
-                refresh_tray_tooltip(&state, &app_handle);
-            }
+                let armed = state
+                    .0
+                    .lock()
+                    .map(|inner| inner.runtime.policy.arm == SystemArm::Armed)
+                    .unwrap_or(false);
+                if armed { 30 } else { 120 }
+            };
+            std::thread::sleep(Duration::from_secs(sleep_secs));
         }
     });
-}
-
-fn refresh_tray_tooltip(state: &AppState, app_handle: &AppHandle) {
-    let Ok((total, used)) = system_memory() else {
-        return;
-    };
-    let Ok(mut inner) = state.0.lock() else {
-        return;
-    };
-    inner.last_total_bytes = total;
-    inner.last_used_bytes = used;
-    let warning = inner
-        .last_groups
-        .iter()
-        .any(|g| matches!(g.fsm_hint.as_str(), "LowYield" | "Thrashing"));
-    let tooltip = tray_tooltip(
-        used,
-        total,
-        inner.runtime.policy.arm == ramjob_core::policy::SystemArm::Armed,
-        warning,
-    );
-    drop(inner);
-    if let Some(tray) = app_handle.tray_by_id(TRAY_ID) {
-        let _ = tray.set_tooltip(Some(&tooltip));
-    }
 }
 
 fn main() {
@@ -234,6 +195,7 @@ fn main() {
             spawn_tick_loop(app.handle().clone());
 
             let pause_item = MenuItem::with_id(app, "pause", "Pause all", true, None::<&str>)?;
+            app.manage(TrayPauseItem(pause_item.clone()));
             let open_item = MenuItem::with_id(app, "open", "Open", true, None::<&str>)?;
             let settings_item =
                 MenuItem::with_id(app, "settings", "Settings", false, None::<&str>)?;
@@ -256,7 +218,6 @@ fn main() {
                 .cloned()
                 .expect("bundle icon configured in tauri.conf.json");
 
-            let pause_item_for_menu = pause_item.clone();
             TrayIconBuilder::with_id(TRAY_ID)
                 .icon(icon)
                 .tooltip("RamJob — Idle")
@@ -270,18 +231,13 @@ fn main() {
                                 let next = !inner.panel.config.pause_all;
                                 match inner.panel.set_pause_all(next) {
                                     Ok(()) => {
-                                        let _ = pause_item_for_menu.set_text(if next {
-                                            "Resume"
-                                        } else {
-                                            "Pause all"
-                                        });
+                                        if let Some(tray_pause) =
+                                            app.try_state::<TrayPauseItem>()
+                                        {
+                                            sync_pause_menu_label(&tray_pause.0, next);
+                                        }
                                     }
                                     Err(e) => {
-                                        // Config write failed — leave the tray
-                                        // label as-is (don't flip UI state on a
-                                        // failed persist) and record the error
-                                        // for `copy_diagnostics` instead of
-                                        // silently discarding it.
                                         inner
                                             .runtime
                                             .diagnostics

@@ -29,6 +29,8 @@ pub struct Runtime {
 pub struct TickOutcome {
     pub system: SystemArm,
     pub trims_attempted: usize,
+    /// Process groups from this tick's enumeration (panel snapshot input).
+    pub apps: Vec<AppGroup>,
 }
 
 /// Post-trim observation derived from a gate measurement (SPEC §2.3 + §4.2).
@@ -67,10 +69,10 @@ impl Runtime {
         self.policy.arm = SystemArm::Armed;
     }
 
-    pub fn tick<P: PressureSource>(
+    pub fn tick(
         &mut self,
         config: &RamjobConfig,
-        pressure: &mut P,
+        pressure: &mut dyn PressureSource,
         now: Instant,
     ) -> Result<TickOutcome, String> {
         let mut sample = pressure.sample()?;
@@ -97,6 +99,7 @@ impl Runtime {
             return Ok(TickOutcome {
                 system,
                 trims_attempted: 0,
+                apps: apps.to_vec(),
             });
         }
 
@@ -179,6 +182,7 @@ impl Runtime {
         Ok(TickOutcome {
             system,
             trims_attempted,
+            apps: apps.to_vec(),
         })
     }
 }

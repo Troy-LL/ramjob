@@ -36,12 +36,12 @@ const MOCK_SNAPSHOT = {
   samples: mockHistory.samples,
   ceiling_edits: mockHistory.ceilingEdits,
   groups: [
-    { key: "chrome", name: "Google Chrome", gf_bytes: 2.1 * 1024 * 1024 * 1024, cap_bytes: 4 * 1024 * 1024 * 1024, always_enforce: false, fsm_hint: "Idle", honest: null },
-    { key: "slack", name: "Slack", gf_bytes: 900 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle", honest: null },
-    { key: "vscode", name: "Visual Studio Code", gf_bytes: 1.3 * 1024 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Pressure", honest: null },
-    { key: "docker", name: "Docker Desktop", gf_bytes: 3.4 * 1024 * 1024 * 1024, cap_bytes: 6 * 1024 * 1024 * 1024, always_enforce: true, fsm_hint: "Idle", honest: null },
-    { key: "spotify", name: "Spotify", gf_bytes: 30 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle", honest: null },
-    { key: "figma", name: "Figma", gf_bytes: 420 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle", honest: null },
+    { key: "chrome", name: "Google Chrome", gf_bytes: 2.1 * 1024 * 1024 * 1024, cap_bytes: 4 * 1024 * 1024 * 1024, always_enforce: false, fsm_hint: "Idle" },
+    { key: "slack", name: "Slack", gf_bytes: 900 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
+    { key: "vscode", name: "Visual Studio Code", gf_bytes: 1.3 * 1024 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Pressure" },
+    { key: "docker", name: "Docker Desktop", gf_bytes: 3.4 * 1024 * 1024 * 1024, cap_bytes: 6 * 1024 * 1024 * 1024, always_enforce: true, fsm_hint: "Idle" },
+    { key: "spotify", name: "Spotify", gf_bytes: 30 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
+    { key: "figma", name: "Figma", gf_bytes: 420 * 1024 * 1024, cap_bytes: 0, always_enforce: false, fsm_hint: "Idle" },
   ],
 };
 
@@ -155,8 +155,7 @@ const DIAL_LADDER_MAX = 16 * GB;
 // don't flip the angular scale mid-gesture (which pinned the marker to 1.0).
 const capDragPreview = {}; // key -> { bytes, dialMax }
 
-function honestMessage(fsmHint, honest, group) {
-  if (honest) return honest;
+function honestMessage(fsmHint, group) {
   if (group && group.cap_bytes > 0 && group.gf_bytes > group.cap_bytes) {
     return `${group.name} is using ${formatBytes(group.gf_bytes)}. Capping at ${formatBytes(group.cap_bytes)} will push memory out of RAM and may make it feel slower.`;
   }
@@ -382,7 +381,7 @@ function renderAppGrid(snapshot, showAll, onCommitCap, onToggleFlag) {
     card.appendChild(gaugeWrap);
     card.appendChild(meta);
 
-    const honestText = honestMessage(g.fsm_hint, g.honest, g);
+    const honestText = honestMessage(g.fsm_hint, g);
     if (honestText) {
       const warn = document.createElement("div");
       warn.className = "app-honest";
@@ -618,6 +617,12 @@ function renderHistoryChart(snapshot, onCommitLimit) {
 async function main() {
   let snapshot = await fetchSnapshot();
   let showAll = false;
+  let lastFingerprint = JSON.stringify(snapshot);
+
+  const applySnapshot = (next) => {
+    snapshot = next;
+    lastFingerprint = JSON.stringify(next);
+  };
 
   const render = () => {
     renderPill(snapshot);
@@ -628,17 +633,17 @@ async function main() {
       snapshot,
       showAll,
       async (key, capBytes, shiftFine) => {
-        snapshot = await callSetCap(key, capBytes, shiftFine);
+        applySnapshot(await callSetCap(key, capBytes, shiftFine));
         render();
       },
       async (key, alwaysEnforce) => {
-        snapshot = await callSetFlags(key, alwaysEnforce);
+        applySnapshot(await callSetFlags(key, alwaysEnforce));
         render();
       }
     );
     renderPauseButton(snapshot);
     renderHistoryChart(snapshot, async (limitBytes, shiftFine) => {
-      snapshot = await callSetOverallLimit(limitBytes, shiftFine);
+      applySnapshot(await callSetOverallLimit(limitBytes, shiftFine));
       render();
     });
   };
@@ -669,7 +674,7 @@ async function main() {
   });
 
   document.getElementById("pause-all-btn").addEventListener("click", async () => {
-    snapshot = await callPauseAll(!snapshot.pause_all);
+    applySnapshot(await callPauseAll(!snapshot.pause_all));
     renderPauseButton(snapshot);
     renderStatusLine(snapshot);
   });
@@ -680,7 +685,10 @@ async function main() {
   // per-app cap drag) so a poll-driven re-render can't fight/reset it.
   setInterval(async () => {
     if (dragState.active || Object.keys(capDragPreview).length > 0) return;
-    snapshot = await fetchSnapshot();
+    const next = await fetchSnapshot();
+    const fp = JSON.stringify(next);
+    if (fp === lastFingerprint) return;
+    applySnapshot(next);
     render();
   }, 1000);
 }

@@ -30,7 +30,6 @@ pub struct PanelGroup {
     pub cap_bytes: u64,
     pub always_enforce: bool,
     pub fsm_hint: String, // "Idle"|"Pressure"|"Trim"|"LowYield"|"Thrashing"|...
-    pub honest: Option<String>, // SPEC §7.4 message when applicable
 }
 
 pub struct PanelState {
@@ -296,7 +295,6 @@ mod tests {
             cap_bytes: 100,
             always_enforce: false,
             fsm_hint: "Thrashing".into(),
-            honest: None,
         }];
         let snap = s.build_snapshot(SystemArm::Armed, 0, 0, &groups);
         assert!(snap.warning);

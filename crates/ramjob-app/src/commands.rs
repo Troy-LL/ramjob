@@ -12,6 +12,7 @@ use ramjob_core::panel::PanelSnapshot;
 
 use crate::clipboard::set_clipboard_text;
 use crate::state::{AppState, AppStateInner};
+use crate::{sync_pause_menu_label, TrayPauseItem};
 
 fn now_unix_ms() -> u64 {
     SystemTime::now()
@@ -76,9 +77,14 @@ pub fn set_flags(
 }
 
 #[tauri::command]
-pub fn pause_all(state: State<AppState>, pause: bool) -> Result<PanelSnapshot, String> {
+pub fn pause_all(
+    state: State<AppState>,
+    pause: bool,
+    tray_pause: State<TrayPauseItem>,
+) -> Result<PanelSnapshot, String> {
     let mut inner = state.0.lock().map_err(|_| "state poisoned".to_string())?;
     inner.panel.set_pause_all(pause)?;
+    sync_pause_menu_label(&tray_pause.0, pause);
     Ok(snapshot_from(&inner))
 }
 

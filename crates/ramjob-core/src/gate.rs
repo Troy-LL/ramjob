@@ -106,16 +106,21 @@ fn fmt_opt_f64(v: Option<f64>) -> String {
         .unwrap_or_else(|| "n/a".into())
 }
 
-/// Physical available bytes from `GlobalMemoryStatusEx` (`ullAvailPhys`).
-pub fn available_phys_bytes() -> Result<u64, String> {
+/// Total and available physical bytes from `GlobalMemoryStatusEx`.
+pub fn phys_memory() -> Result<(u64, u64), String> {
     unsafe {
         let mut status = MEMORYSTATUSEX {
             dwLength: std::mem::size_of::<MEMORYSTATUSEX>() as u32,
             ..Default::default()
         };
         GlobalMemoryStatusEx(&mut status).map_err(|e| format!("GlobalMemoryStatusEx: {e}"))?;
-        Ok(status.ullAvailPhys)
+        Ok((status.ullTotalPhys, status.ullAvailPhys))
     }
+}
+
+/// Physical available bytes from `GlobalMemoryStatusEx` (`ullAvailPhys`).
+pub fn available_phys_bytes() -> Result<u64, String> {
+    Ok(phys_memory()?.1)
 }
 
 /// Strip trailing `.exe` and compare case-insensitively.

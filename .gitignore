@@ -13,4 +13,10 @@
 *.exe
 crates/ramjob-app/gen/
 
+.superpowers/brainstorm/.last-port
+.superpowers/brainstorm/.last-token
+.superpowers/brainstorm/**/state/server.pid
+.superpowers/brainstorm/**/state/server-info
+.superpowers/brainstorm/**/state/server-instance-id
+
 .audit/
