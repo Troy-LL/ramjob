@@ -122,7 +122,7 @@ impl EtwProcessSource {
     }
 
     #[cfg(test)]
-    fn new_inject_only() -> Self {
+    pub(crate) fn new_inject_only() -> Self {
         Self {
             queue: Arc::new(Mutex::new(VecDeque::new())),
             session: None,
