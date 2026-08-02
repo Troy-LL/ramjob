@@ -20,4 +20,6 @@ pub mod runtime;
 mod runtime_backstop;
 pub mod scanner;
 pub mod sys_history;
+#[cfg(windows)]
+pub(crate) mod win_reg;
 pub mod yield_math;

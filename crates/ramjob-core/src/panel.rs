@@ -65,7 +65,9 @@ impl PanelState {
         median_gf: Option<u64>,
     ) -> Result<(), String> {
         let cap = clamp_cap_with_policy(raw_cap, shift_fine, median_gf);
-        self.upsert_group(key).cap_bytes = cap;
+        let g = self.upsert_group(key);
+        g.cap_bytes = cap;
+        g.pinned = true;
         save_config_atomic(&self.config_path, &self.config)
     }
 
@@ -89,7 +91,9 @@ impl PanelState {
     /// Set a group's `always_enforce` flag (opt-in hard backstop), persisting config.
     /// Creates the group with a zero cap if it doesn't exist yet, same as `set_cap`.
     pub fn set_flags(&mut self, key: &str, always_enforce: bool) -> Result<(), String> {
-        self.upsert_group(key).always_enforce = always_enforce;
+        let g = self.upsert_group(key);
+        g.always_enforce = always_enforce;
+        g.pinned = true;
         save_config_atomic(&self.config_path, &self.config)
     }
 
@@ -215,6 +219,32 @@ mod tests {
         assert_eq!(s.config.groups.len(), 1);
         assert_eq!(s.config.groups[0].cap_bytes, 4 * 1024 * 1024 * 1024);
         assert!(s.config.groups[0].always_enforce);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_cap_pins_group_for_prune() {
+        let path = temp_config_path("pin_cap");
+        let mut s = state(path.clone());
+        s.set_cap("hog", 1 << 30, false, None).unwrap();
+        assert!(s.config.groups.iter().find(|g| g.key == "hog").unwrap().pinned);
+
+        let reloaded = crate::config::load_config_file(&path).unwrap();
+        assert!(reloaded.groups[0].pinned);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn set_flags_pins_group_for_prune() {
+        let path = temp_config_path("pin_flags");
+        let mut s = state(path.clone());
+        s.set_flags("hog", true).unwrap();
+        assert!(s.config.groups.iter().find(|g| g.key == "hog").unwrap().pinned);
+
+        let reloaded = crate::config::load_config_file(&path).unwrap();
+        assert!(reloaded.groups[0].pinned);
 
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }

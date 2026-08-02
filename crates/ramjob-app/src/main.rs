@@ -292,7 +292,8 @@ fn main() {
                         }
                         "autostart" => {
                             if let Ok(mut inner) = state.inner().0.lock() {
-                                let next = !inner.panel.config.autostart;
+                                let prev = inner.panel.config.autostart;
+                                let next = !prev;
                                 let config_path = inner.panel.config_path.clone();
                                 match set_autostart(
                                     &config_path,
@@ -314,9 +315,7 @@ fn main() {
                                         if let Some(tray_autostart) =
                                             app.try_state::<TrayAutostartItem>()
                                         {
-                                            let _ = tray_autostart
-                                                .0
-                                                .set_checked(inner.panel.config.autostart);
+                                            let _ = tray_autostart.0.set_checked(prev);
                                         }
                                     }
                                 }

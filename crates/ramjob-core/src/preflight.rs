@@ -5,8 +5,14 @@ use std::sync::OnceLock;
 use crate::diagnostics::DiagnosticsRing;
 
 const ONE_GIB: u64 = 1024 * 1024 * 1024;
+const ONE_MIB: u64 = 1024 * 1024;
 const HIGH_RAM_THRESHOLD: u64 = 32 * ONE_GIB;
 const MIN_PAGEFILE_BYTES: u64 = ONE_GIB;
+
+/// Convert registry `PagingFiles` max megabytes to bytes.
+fn mb_to_bytes(mb: u64) -> u64 {
+    mb.saturating_mul(ONE_MIB)
+}
 
 static CACHED: OnceLock<PreflightReport> = OnceLock::new();
 
@@ -79,36 +85,102 @@ impl PreflightReport {
 
     /// Short §5.4 copy for the §7.3 first-run panel (not the diagnostics dump).
     pub fn panel_notes(&self) -> Vec<String> {
-        let mut out = Vec::new();
+        format_panel_notes(self.total_ram_bytes, &self.pagefile, self.elevated)
+    }
+}
 
-        match &self.pagefile {
-            PagefileStatus::Disabled => out.push(
-                "Pagefile is disabled — soft trim has nowhere to spill; prefer backstop-only \
-                 or a system-managed pagefile."
-                    .into(),
-            ),
-            PagefileStatus::Small { .. } => out.push(
-                "Pagefile is under 1 GB — soft trim spill space is limited; yield may be poor."
-                    .into(),
-            ),
-            _ => {}
+fn format_panel_notes(
+    total_ram_bytes: u64,
+    pagefile: &PagefileStatus,
+    elevated: bool,
+) -> Vec<String> {
+    let mut out = Vec::new();
+    if let Some(line) = pagefile_panel_line(pagefile) {
+        out.push(line);
+    }
+    if let Some(line) = dormancy_panel_line(total_ram_bytes) {
+        out.push(line);
+    }
+    if let Some(line) = privilege_panel_line(elevated) {
+        out.push(line);
+    }
+    out
+}
+
+fn pagefile_panel_line(pagefile: &PagefileStatus) -> Option<String> {
+    match pagefile {
+        PagefileStatus::Disabled => Some(
+            "Pagefile is disabled — soft trim has nowhere to spill; prefer backstop-only \
+             or a system-managed pagefile."
+                .into(),
+        ),
+        PagefileStatus::Small { .. } => Some(
+            "Pagefile is under 1 GB — soft trim spill space is limited; yield may be poor."
+                .into(),
+        ),
+        _ => None,
+    }
+}
+
+fn pagefile_diagnostic_line(pagefile: &PagefileStatus) -> String {
+    match pagefile {
+        PagefileStatus::Disabled => {
+            "Pagefile: disabled — soft trim has nowhere to spill; yield will be poor; \
+             prefer backstop-only or a system-managed pagefile"
+                .into()
         }
+        PagefileStatus::Small { max_bytes } => format!(
+            "Pagefile: {:.1} GB (< 1 GB) — soft trim spill space is limited; yield may be poor",
+            gib(*max_bytes)
+        ),
+        PagefileStatus::Ok { max_bytes } => format!("Pagefile: {:.1} GB", gib(*max_bytes)),
+        PagefileStatus::Unknown { detail } => format!("Pagefile: {detail}"),
+    }
+}
 
-        if self.total_ram_bytes >= HIGH_RAM_THRESHOLD {
-            out.push(
-                "With 32 GB+ RAM, low-memory pressure rarely arms — RamJob will mostly stay \
-                 dormant. That's expected, not a bug."
-                    .into(),
-            );
-        }
+fn dormancy_panel_line(total_ram_bytes: u64) -> Option<String> {
+    if total_ram_bytes >= HIGH_RAM_THRESHOLD {
+        Some(
+            "With 32 GB+ RAM, low-memory pressure rarely arms — RamJob will mostly stay \
+             dormant. That's expected, not a bug."
+                .into(),
+        )
+    } else {
+        None
+    }
+}
 
-        if !self.elevated {
-            out.push(
-                "Not running as administrator — some apps may appear uncappable.".into(),
-            );
-        }
+fn dormancy_diagnostic_line(total_ram_bytes: u64) -> Option<String> {
+    if total_ram_bytes >= HIGH_RAM_THRESHOLD {
+        Some(
+            "Total RAM >= 32 GB — low-memory pressure will rarely arm; RamJob will mostly \
+             stay dormant; this is expected, not a bug"
+                .into(),
+        )
+    } else {
+        None
+    }
+}
 
-        out
+fn privilege_panel_line(elevated: bool) -> Option<String> {
+    if elevated {
+        None
+    } else {
+        Some(
+            "Not running as administrator — some apps may appear uncappable.".into(),
+        )
+    }
+}
+
+fn privilege_diagnostic_line(elevated: bool) -> Option<String> {
+    if elevated {
+        None
+    } else {
+        Some(
+            "Not elevated — cannot limit higher-integrity or other-user processes; \
+             those groups appear uncappable"
+                .into(),
+        )
     }
 }
 
@@ -119,39 +191,12 @@ fn build_notes(total_ram_bytes: u64, pagefile: &PagefileStatus, elevated: bool) 
         "Total RAM: {:.1} GB",
         gib(total_ram_bytes)
     ));
-
-    match pagefile {
-        PagefileStatus::Disabled => notes.push(
-            "Pagefile: disabled — soft trim has nowhere to spill; yield will be poor; \
-             prefer backstop-only or a system-managed pagefile"
-                .into(),
-        ),
-        PagefileStatus::Small { max_bytes } => notes.push(format!(
-            "Pagefile: {:.1} GB (< 1 GB) — soft trim spill space is limited; yield may be poor",
-            gib(*max_bytes)
-        )),
-        PagefileStatus::Ok { max_bytes } => {
-            notes.push(format!("Pagefile: {:.1} GB", gib(*max_bytes)));
-        }
-        PagefileStatus::Unknown { detail } => {
-            notes.push(format!("Pagefile: {detail}"));
-        }
+    notes.push(pagefile_diagnostic_line(pagefile));
+    if let Some(line) = dormancy_diagnostic_line(total_ram_bytes) {
+        notes.push(line);
     }
-
-    if total_ram_bytes >= HIGH_RAM_THRESHOLD {
-        notes.push(
-            "Total RAM >= 32 GB — low-memory pressure will rarely arm; RamJob will mostly \
-             stay dormant; this is expected, not a bug"
-                .into(),
-        );
-    }
-
-    if !elevated {
-        notes.push(
-            "Not elevated — cannot limit higher-integrity or other-user processes; \
-             those groups appear uncappable"
-                .into(),
-        );
+    if let Some(line) = privilege_diagnostic_line(elevated) {
+        notes.push(line);
     }
 
     notes
@@ -180,26 +225,34 @@ fn parse_paging_files_max_mb(chars: &[u16]) -> Option<u64> {
 
 #[cfg(windows)]
 mod windows_impl {
-    use std::ffi::OsStr;
-    use std::os::windows::ffi::OsStrExt;
-
     use windows::core::PCWSTR;
-    use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR};
+    use windows::Win32::Foundation::{CloseHandle, ERROR_FILE_NOT_FOUND};
     use windows::Win32::Security::{
         GetTokenInformation, TokenElevation, TOKEN_ELEVATION, TOKEN_QUERY,
     };
     use windows::Win32::System::Registry::{
-        RegCloseKey, RegOpenKeyExW, RegQueryValueExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ,
-        REG_MULTI_SZ, REG_VALUE_TYPE,
+        RegOpenKeyExW, HKEY, HKEY_LOCAL_MACHINE, KEY_READ, REG_MULTI_SZ, REG_VALUE_TYPE,
     };
     use windows::Win32::System::SystemInformation::{GlobalMemoryStatusEx, MEMORYSTATUSEX};
     use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
 
-    use super::{SysProbe, ONE_GIB};
+    use crate::win_reg::{query_value_buf, query_value_size, reg_ok_str, wide, RegKey};
+
+    use super::{mb_to_bytes, SysProbe};
 
     const MEMORY_MANAGEMENT_KEY: &str =
         r"SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management";
     const PAGING_FILES_VALUE: &str = "PagingFiles";
+
+    struct TokenHandle(windows::Win32::Foundation::HANDLE);
+
+    impl Drop for TokenHandle {
+        fn drop(&mut self) {
+            unsafe {
+                let _ = CloseHandle(self.0);
+            }
+        }
+    }
 
     #[derive(Debug, Clone, Copy, Default)]
     pub struct WindowsProbe;
@@ -221,7 +274,7 @@ mod windows_impl {
             match read_paging_files_max_mb()? {
                 None => memory_status_pagefile_max(),
                 Some(0) => memory_status_pagefile_max(),
-                Some(total_mb) => Ok(Some(total_mb * ONE_GIB)),
+                Some(total_mb) => Ok(Some(mb_to_bytes(total_mb))),
             }
         }
 
@@ -230,11 +283,12 @@ mod windows_impl {
                 let mut token = windows::Win32::Foundation::HANDLE::default();
                 OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &mut token)
                     .map_err(|e| format!("OpenProcessToken: {e}"))?;
+                let token = TokenHandle(token);
 
                 let mut elevation = TOKEN_ELEVATION::default();
                 let mut size = 0u32;
                 GetTokenInformation(
-                    token,
+                    token.0,
                     TokenElevation,
                     Some(&mut elevation as *mut _ as *mut _),
                     std::mem::size_of::<TOKEN_ELEVATION>() as u32,
@@ -267,7 +321,7 @@ mod windows_impl {
     fn read_paging_files_max_mb() -> Result<Option<u64>, String> {
         let path = wide(MEMORY_MANAGEMENT_KEY);
         let mut raw = HKEY::default();
-        reg_ok(
+        reg_ok_str(
             unsafe {
                 RegOpenKeyExW(
                     HKEY_LOCAL_MACHINE,
@@ -284,20 +338,11 @@ mod windows_impl {
         let name = wide(PAGING_FILES_VALUE);
         let mut value_type = REG_VALUE_TYPE::default();
         let mut data_size = 0u32;
-        let status = unsafe {
-            RegQueryValueExW(
-                key.0,
-                PCWSTR(name.as_ptr()),
-                None,
-                Some(&mut value_type),
-                None,
-                Some(&mut data_size),
-            )
-        };
+        let status = query_value_size(key.0, PCWSTR(name.as_ptr()), &mut value_type, &mut data_size);
         if status == ERROR_FILE_NOT_FOUND {
             return Ok(None);
         }
-        reg_ok(status, "RegQueryValueExW(PagingFiles size)")?;
+        reg_ok_str(status, "RegQueryValueExW(PagingFiles size)")?;
         if value_type != REG_MULTI_SZ {
             return Err(format!(
                 "PagingFiles: expected REG_MULTI_SZ, got {}",
@@ -309,46 +354,19 @@ mod windows_impl {
         }
 
         let mut buf = vec![0u8; data_size as usize];
-        reg_ok(
-            unsafe {
-                RegQueryValueExW(
-                    key.0,
-                    PCWSTR(name.as_ptr()),
-                    None,
-                    Some(&mut value_type),
-                    Some(buf.as_mut_ptr()),
-                    Some(&mut data_size),
-                )
-            },
-            "RegQueryValueExW(PagingFiles data)",
-        )?;
+        query_value_buf(
+            key.0,
+            PCWSTR(name.as_ptr()),
+            &mut buf,
+            &mut value_type,
+            &mut data_size,
+        )
+        .map_err(|code| format!("RegQueryValueExW(PagingFiles data) failed (win32 {code})"))?;
 
         let wide_len = buf.len() / 2;
         let chars =
             unsafe { std::slice::from_raw_parts(buf.as_ptr() as *const u16, wide_len) };
         Ok(super::parse_paging_files_max_mb(chars))
-    }
-
-    struct RegKey(HKEY);
-
-    impl Drop for RegKey {
-        fn drop(&mut self) {
-            unsafe {
-                let _ = RegCloseKey(self.0);
-            }
-        }
-    }
-
-    fn reg_ok(status: WIN32_ERROR, context: &str) -> Result<(), String> {
-        if status == ERROR_SUCCESS {
-            Ok(())
-        } else {
-            Err(format!("{context} failed (win32 {})", status.0))
-        }
-    }
-
-    fn wide(s: &str) -> Vec<u16> {
-        OsStr::new(s).encode_wide().chain(Some(0)).collect()
     }
 }
 
@@ -412,6 +430,42 @@ mod tests {
                 .iter()
                 .any(|n| n.contains("Pagefile: disabled"))
         );
+    }
+
+    #[test]
+    fn registry_mb_512_classifies_as_small() {
+        let report = collect_with(&RegistryMbProbe { max_mb: 512 });
+        assert!(matches!(report.pagefile, PagefileStatus::Small { max_bytes } if max_bytes == 512 * 1024 * 1024));
+    }
+
+    #[test]
+    fn registry_mb_2048_classifies_as_ok() {
+        let report = collect_with(&RegistryMbProbe { max_mb: 2048 });
+        assert!(matches!(report.pagefile, PagefileStatus::Ok { max_bytes } if max_bytes == 2048 * 1024 * 1024));
+    }
+
+    struct RegistryMbProbe {
+        max_mb: u64,
+    }
+
+    impl SysProbe for RegistryMbProbe {
+        fn total_ram_bytes(&self) -> Result<u64, String> {
+            Ok(16 * ONE_GIB)
+        }
+
+        fn pagefile_max_bytes(&self) -> Result<Option<u64>, String> {
+            Ok(Some(mb_to_bytes(self.max_mb)))
+        }
+
+        fn is_elevated(&self) -> Result<bool, String> {
+            Ok(true)
+        }
+    }
+
+    #[test]
+    fn mb_to_bytes_uses_mebibytes_not_gibibytes() {
+        assert_eq!(mb_to_bytes(512), 512 * 1024 * 1024);
+        assert_ne!(mb_to_bytes(512), 512 * ONE_GIB);
     }
 
     #[test]

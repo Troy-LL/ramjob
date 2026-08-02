@@ -1,15 +1,15 @@
 //! HKCU Run autostart helper (SPEC §8 — `RamJob` value under CurrentVersion\Run).
 
-use std::ffi::OsStr;
-use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use windows::core::PCWSTR;
-use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, ERROR_SUCCESS, WIN32_ERROR};
+use windows::Win32::Foundation::ERROR_FILE_NOT_FOUND;
 use windows::Win32::System::Registry::{
-    RegCloseKey, RegDeleteValueW, RegOpenKeyExW, RegQueryValueExW, RegSetValueExW, HKEY,
-    HKEY_CURRENT_USER, KEY_QUERY_VALUE, KEY_SET_VALUE, REG_SZ, REG_VALUE_TYPE,
+    RegDeleteValueW, RegOpenKeyExW, RegSetValueExW, HKEY, HKEY_CURRENT_USER, KEY_QUERY_VALUE,
+    KEY_SET_VALUE, REG_SZ, REG_VALUE_TYPE,
 };
+
+use crate::win_reg::{query_value_buf, query_value_size, reg_status, wide, RegKey};
 
 /// Run value name written under HKCU `...\CurrentVersion\Run`.
 pub const VALUE_NAME: &str = "RamJob";
@@ -121,16 +121,6 @@ pub fn disable_with<R: RunRegistry + ?Sized>(registry: &R) -> Result<(), Autosta
     registry.delete_value(VALUE_NAME)
 }
 
-struct RegKey(HKEY);
-
-impl Drop for RegKey {
-    fn drop(&mut self) {
-        unsafe {
-            let _ = RegCloseKey(self.0);
-        }
-    }
-}
-
 fn with_run_key<T>(
     access: windows::Win32::System::Registry::REG_SAM_FLAGS,
     f: impl FnOnce(RegKey) -> Result<T, AutostartError>,
@@ -157,16 +147,7 @@ fn query_sz_value(key: RegKey, name: &str) -> Result<Option<String>, AutostartEr
     let mut value_type = REG_VALUE_TYPE::default();
     let mut data_size = 0u32;
 
-    let status = unsafe {
-        RegQueryValueExW(
-            key.0,
-            PCWSTR(name_w.as_ptr()),
-            None,
-            Some(&mut value_type),
-            None,
-            Some(&mut data_size),
-        )
-    };
+    let status = query_value_size(key.0, PCWSTR(name_w.as_ptr()), &mut value_type, &mut data_size);
     if status == ERROR_FILE_NOT_FOUND {
         return Ok(None);
     }
@@ -179,17 +160,14 @@ fn query_sz_value(key: RegKey, name: &str) -> Result<Option<String>, AutostartEr
     }
 
     let mut buf = vec![0u8; data_size as usize];
-    reg_ok(
-        unsafe {
-            RegQueryValueExW(
-                key.0,
-                PCWSTR(name_w.as_ptr()),
-                None,
-                Some(&mut value_type),
-                Some(buf.as_mut_ptr()),
-                Some(&mut data_size),
-            )
-        },
+    reg_ok_code(
+        query_value_buf(
+            key.0,
+            PCWSTR(name_w.as_ptr()),
+            &mut buf,
+            &mut value_type,
+            &mut data_size,
+        ),
         "RegQueryValueExW(data)",
     )?;
 
@@ -220,19 +198,15 @@ fn write_sz_value(key: RegKey, name: &str, value: &str) -> Result<(), AutostartE
     )
 }
 
-fn reg_ok(status: WIN32_ERROR, context: &'static str) -> Result<(), AutostartError> {
-    if status == ERROR_SUCCESS {
-        Ok(())
-    } else {
-        Err(AutostartError::Registry {
-            code: status.0,
-            context,
-        })
-    }
+fn reg_ok(
+    status: windows::Win32::Foundation::WIN32_ERROR,
+    context: &'static str,
+) -> Result<(), AutostartError> {
+    reg_status(status).map_err(|code| AutostartError::Registry { code, context })
 }
 
-fn wide(s: &str) -> Vec<u16> {
-    OsStr::new(s).encode_wide().chain(Some(0)).collect()
+fn reg_ok_code(result: Result<(), u32>, context: &'static str) -> Result<(), AutostartError> {
+    result.map_err(|code| AutostartError::Registry { code, context })
 }
 
 #[cfg(test)]

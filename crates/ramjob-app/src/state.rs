@@ -40,41 +40,49 @@ fn prune_and_save_if_needed(path: &Path, cfg: &mut RamjobConfig, now: u64) -> Re
     Ok(())
 }
 
-/// Prune stale groups on load, persist if needed, and sync HKCU Run to `autostart`.
+/// Prune stale groups on load, persist if needed. HKCU Run sync is best-effort.
 pub fn maintain_config_on_startup(path: &Path, cfg: RamjobConfig) -> Result<RamjobConfig, String> {
     let mut cfg = cfg;
     prune_and_save_if_needed(path, &mut cfg, now_unix_secs())?;
-    sync_autostart_run(cfg.autostart)?;
     Ok(cfg)
 }
 
-/// Persist `config.autostart` and sync HKCU Run.
+/// Best-effort HKCU Run alignment; returns an error message when sync fails.
+pub fn try_sync_autostart(enabled: bool) -> Option<String> {
+    sync_autostart_run(enabled).err()
+}
+
+/// Sync HKCU Run first, then persist `config.autostart` so disk never disagrees with OS.
 pub fn set_autostart(path: &Path, cfg: &mut RamjobConfig, enabled: bool) -> Result<(), String> {
     if cfg.autostart == enabled {
         return Ok(());
     }
+    sync_autostart_run(enabled)?;
     cfg.autostart = enabled;
-    save_config_atomic(path, cfg)?;
-    sync_autostart_run(enabled)
+    save_config_atomic(path, cfg)
 }
 
-/// Refresh `last_seen_unix` for config groups observed this tick; save if any changed.
+const SECS_PER_DAY: u64 = 86_400;
+
+/// Refresh `last_seen_unix` for observed groups in memory; persist at most once per calendar day.
 pub fn touch_observed_groups(
     path: &Path,
     cfg: &mut RamjobConfig,
     observed_keys: &[String],
     now_unix: u64,
 ) -> Result<(), String> {
-    let mut changed = false;
+    let today = now_unix / SECS_PER_DAY;
+    let mut dirty = false;
     for key in observed_keys {
         if let Some(g) = cfg.groups.iter_mut().find(|g| g.key == *key) {
-            if g.last_seen_unix != now_unix {
-                g.last_seen_unix = now_unix;
-                changed = true;
+            let prior_day = g.last_seen_unix / SECS_PER_DAY;
+            g.last_seen_unix = now_unix;
+            if prior_day != today {
+                dirty = true;
             }
         }
     }
-    if changed {
+    if dirty {
         save_config_atomic(path, cfg)?;
     }
     Ok(())
@@ -125,6 +133,11 @@ impl AppState {
         let config = ensure_config(config_path)?;
         let config = maintain_config_on_startup(config_path, config)?;
         let mut runtime = Runtime::new();
+        if let Some(e) = try_sync_autostart(config.autostart) {
+            runtime
+                .diagnostics
+                .push(format!("autostart sync on startup failed: {e}"));
+        }
         preflight::run_once().push_to_diagnostics(&mut runtime.diagnostics);
         let panel = PanelState {
             config_path: config_path.to_path_buf(),
@@ -206,8 +219,35 @@ mod tests {
     }
 
     #[test]
-    fn touch_observed_groups_updates_last_seen_and_persists() {
-        let path = temp_config_path("touch_seen");
+    fn touch_observed_groups_same_day_skips_disk_write() {
+        let path = temp_config_path("touch_same_day");
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let day_start = 1_800_000_000u64;
+        let mut cfg = RamjobConfig::default();
+        cfg.groups.push(GroupConfig {
+            key: "hog".into(),
+            last_seen_unix: day_start,
+            ..Default::default()
+        });
+        save_config_atomic(&path, &cfg).unwrap();
+
+        let modified_after_first_save = std::fs::metadata(&path).unwrap().modified().unwrap();
+
+        touch_observed_groups(&path, &mut cfg, &["hog".into()], day_start + 60).unwrap();
+        assert_eq!(cfg.groups[0].last_seen_unix, day_start + 60);
+
+        let modified_after_touch = std::fs::metadata(&path).unwrap().modified().unwrap();
+        assert_eq!(modified_after_first_save, modified_after_touch);
+
+        let reloaded = load_config_file(&path).unwrap();
+        assert_eq!(reloaded.groups[0].last_seen_unix, day_start);
+
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    #[test]
+    fn touch_observed_groups_new_day_persists() {
+        let path = temp_config_path("touch_new_day");
         std::fs::create_dir_all(path.parent().unwrap()).unwrap();
         let mut cfg = RamjobConfig::default();
         cfg.groups.push(GroupConfig {
