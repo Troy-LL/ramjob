@@ -16,16 +16,25 @@ cargo test -p ramjob-core
 cargo build -p ramjob-cli -p ramjob-app
 ```
 
-## Results on this host (2026-08-03 ~02:06)
+## Results on this host
+
+### 2026-08-03 ~02:06 (SAC On)
 
 | Check | Result |
 |---|---|
 | `SmartAppControlState` | **On** |
-| Compile `ramjob-core` | OK (links under `%USERPROFILE%\ramjob-target`) |
-| Run any `ramjob_core-*.exe` test binary | **FAIL — os error 4551** Application Control blocked |
-| Windows toast | “Part of this app has been blocked — Some features of `C:\Users\admin\.rustup`” (+14) |
+| Compile | OK |
+| Run test binaries | **FAIL — os error 4551** |
 
-Earlier in this milestone (before SAC tightened), discovery/adaptive/runtime tests passed (153 lib + discovery suite). Those results stand as historical evidence on commits through `f54e9ca`. **Re-execution is currently impossible** without SAC Off or an allowlist for `%USERPROFILE%\ramjob-target` and `.rustup`.
+### 2026-08-03 ~02:12 (SAC Off — user)
+
+| Check | Result |
+|---|---|
+| `SmartAppControlState` | **Off** |
+| `cargo test -p ramjob-core` | **149 passed**, 3 ignored; m2_integration + m4_backstop green |
+| `cargo test -p ramjob-core budget --release` | **2 passed** (WS ceiling ok) |
+| `cargo build -p ramjob-cli` | OK |
+| `cargo build -p ramjob-app` | **FAIL** until `DiscoverySource: Send` fix (AppState) — in flight |
 
 ## Budget harness (task 6)
 
