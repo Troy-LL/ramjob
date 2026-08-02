@@ -23,7 +23,7 @@ pub enum GroupPhase {
 pub enum FsmAction {
     None,
     SoftTrim,
-    RecordWouldBackstop,
+    Backstop,
 }
 
 #[derive(Debug, Clone)]
@@ -135,8 +135,10 @@ impl GroupFsm {
             if self.ineffective_times.len() as u32 >= INEFFECTIVE_NEEDED
                 && !self.would_backstop_emitted
             {
-                self.would_backstop_emitted = true;
-                return FsmAction::RecordWouldBackstop;
+                if input.always_enforce {
+                    self.would_backstop_emitted = true;
+                    return FsmAction::Backstop;
+                }
             }
         }
 
@@ -264,7 +266,7 @@ mod tests {
     }
 
     #[test]
-    fn three_ineffective_records_would_backstop() {
+    fn three_ineffective_without_opt_in_stays_soft_trim() {
         let mut f = GroupFsm::new();
         let t0 = Instant::now();
         let mut inp = input(1000, 100, SystemArm::Armed, false, 3.0, t0);
@@ -273,6 +275,21 @@ mod tests {
         inp.now = t0 + Duration::from_secs(1);
         assert_eq!(f.step(inp), FsmAction::SoftTrim);
         inp.now = t0 + Duration::from_secs(2);
-        assert_eq!(f.step(inp), FsmAction::RecordWouldBackstop);
+        assert_eq!(f.step(inp), FsmAction::SoftTrim);
+    }
+
+    #[test]
+    fn three_ineffective_emits_backstop_when_opted_in() {
+        let mut f = GroupFsm::new();
+        let t0 = Instant::now();
+        let mut inp = input(1000, 100, SystemArm::Armed, true, 3.0, t0);
+        inp.trim_was_ineffective = true;
+        assert_eq!(f.step(inp), FsmAction::SoftTrim);
+        inp.now = t0 + Duration::from_secs(1);
+        assert_eq!(f.step(inp), FsmAction::SoftTrim);
+        inp.now = t0 + Duration::from_secs(2);
+        assert_eq!(f.step(inp), FsmAction::Backstop);
+        inp.now = t0 + Duration::from_secs(3);
+        assert_eq!(f.step(inp), FsmAction::SoftTrim);
     }
 }

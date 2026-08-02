@@ -129,7 +129,7 @@ impl Runtime {
             let action = fsm.step(input);
             match action {
                 FsmAction::None => {}
-                FsmAction::RecordWouldBackstop => {
+                FsmAction::Backstop => {
                     self.diagnostics
                         .push(format!("{} WouldBackstop gf={gf}", gc.key));
                 }
