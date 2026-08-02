@@ -22,7 +22,7 @@ Verify: doctor ok; `cargo test --workspace` green; `ramjob-app` builds.
 | 2 job_backstop store | done | `9115f64` |
 | 3 FSM Backstop action | done | `9d939bd` |
 | 4 Runtime wire-up | done | `a199c1b` |
-| 5 Hog integration verify | done | _(this commit)_ |
+| 5 Hog integration verify | done | `bcf9fb8` |
 | 6 Panel warning + SPEC | done | `67726f0` |
 | 7 Thermo + lessons | pending | |
 
