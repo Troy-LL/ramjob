@@ -1,30 +1,30 @@
 # SDD progress — RamJob
 
-Milestone: M3 (tray + panel + sliders)
+Milestone: **M4** (Job Object backstop) — starting  
+Prior: **M3 closed** on `milestone/m3-thermo-fix` after thermo + ticket 30.
 
-M0/M1/M2 closed earlier. M3 design + plan + SDD landed via `milestone/m3-tray-ui` (merged PR #1); post-merge parity fixes on `main`.
+## M3 closeout
 
-## M3 tasks (from plan / merge)
+| Item | Status |
+|---|---|
+| Design + plan + tray UI | done (merged PR #1 + parity) |
+| Thermo CQ | done — [Thermo](b7af3b7f-0ef2-48ac-a9f9-6ddb18247688): Crit 2 / Imp 5 |
+| Ticket 30 thermo fixes | done `afc0166` — review APPROVED |
+| Lesson | `always-on-engine-cadence` (panel visibility ≠ stop engine) |
 
-| Task | Status | Notes |
+Verify: doctor ok; `cargo test --workspace` green; `ramjob-app` builds.
+
+## M4 tasks
+
+| Task | Status | Commit |
 |---|---|---|
-| Scaffold ramjob-app | done | Tauri v2 |
-| History + ceiling ticks | done | core + chart |
-| Cap snap/floor + overall_limit | done | config |
-| Panel snapshot IPC | done | |
-| Tray + lazy panel | done | |
-| Instrument shell / gauges | done | |
-| First-run + diagnostics copy | done | |
-| Parity closure (IPC, show-all, drag) | done | `837196a`+ |
-| Verify notes | done | `.superpowers/sdd/m3-verify.md` |
-| Thermo CQ | done | ticket 30 — C1–C2, I3–I7 |
+| 1 commit_ratio math | pending | |
+| 2 job_backstop store | pending | |
+| 3 FSM Backstop action | pending | |
+| 4 Runtime wire-up | pending | |
+| 5 Hog integration verify | pending | |
+| 6 Panel warning + SPEC | pending | |
+| 7 Thermo + lessons | pending | |
 
-## Verify (2026-08-03 autonomous)
-
-- `verify-ramjob` doctor: cargo=ok, msvc_link=ok, ramjob=ok, ramjob_list=ok
-- `cargo test --workspace`: green (core 87 + m2_integration + hog)
-- Tray E2E: blocked on this host when SAC rejects unsigned Tauri build scripts (see parity design SAC note). Source parity committed; GUI proof deferred.
-
-## Thermo
-
-- Pending: once for M3 (post-verify)
+Design: `docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`  
+Plan: `docs/superpowers/plans/2026-08-03-m4-job-object-backstop.md`

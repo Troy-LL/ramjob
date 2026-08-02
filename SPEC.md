@@ -267,9 +267,10 @@ in a 60 s window
 
 Backstop is **opt-in per app**, default off, with an explicit warning (§7.4).
 
-`[OPEN]` Auto-enable the backstop for apps with known-good OOM handling? Browsers kill a single
-renderer on OOM rather than dying. A small bundled profile list could flip the default for
-Chromium-family apps only.
+**Auto-enable Chromium-family backstop (deferred M4 → post-M4):** M4 ships **opt-in only**
+(`always_enforce` / panel ⚙) with §7.4 warning. A bundled “known-good OOM” profile list that
+flips the default for Chromium-family apps remains an open product call — do not silent-enable
+in M4. Design: [`docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md`](docs/superpowers/specs/2026-08-03-m4-job-object-backstop-design.md).
 
 ---
 

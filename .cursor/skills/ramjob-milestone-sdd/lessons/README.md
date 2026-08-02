@@ -11,6 +11,7 @@ Repeatable approach failures captured as skills or structural checks.
 | global invoke | [tauri-with-global-tauri](tauri-with-global-tauri/SKILL.md) | Missing withGlobalTauri → panel stuck on MOCK_SNAPSHOT |
 | lock across settle | [trim-lock-covers-settle](trim-lock-covers-settle/SKILL.md) | Released trim_lock before settle; dual ΔGF pipelines; classified no-op trims |
 | single measure owner | [single-measure-owner](single-measure-owner/SKILL.md) | Second §2.3 copy in runtime; stubbed FSM refault/ineffective inputs |
+| always-on cadence | [always-on-engine-cadence](always-on-engine-cadence/SKILL.md) | Panel hide stops Runtime tick; tooltip-only path |
 
 ## How to add
 

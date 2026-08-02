@@ -8,10 +8,9 @@ alwaysApply: true
 
 ## Current milestone
 
-**M3 — Tray + panel + sliders**  
-Prior: M0/M1/M2 implementation done on `milestone/m2-policy-fsm`.  
-M0 formal 3-machine corpus = ongoing user testing (SPEC §10 proceed decision 2026-07-27).  
-Do not start M4 Job Objects until M3 UX path is agreed.
+**M4 — Job Object backstop (opt-in, §3.2)**  
+Prior: M3 closed on `milestone/m3-thermo-fix` (thermo + ticket 30 APPROVED; UX path agreed by user-delegated autonomous run 2026-08-03).  
+M0 formal 3-machine corpus = ongoing user testing. Do not start M5 until M4 thermo Critical/Important = 0.
 
 ## Pipeline (every milestone / plan)
 
