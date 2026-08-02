@@ -74,6 +74,27 @@ impl Runtime {
         }
     }
 
+    /// Test-only constructor with injectable Job Object store.
+    #[cfg(test)]
+    pub fn new_with_backstop_store(backstop: JobBackstopStore) -> Self {
+        Self {
+            policy: PolicyState::new(),
+            groups: HashMap::new(),
+            rates: HashMap::new(),
+            diagnostics: DiagnosticsRing::new(),
+            path_cache: crate::scanner::PathCache::new(),
+            commit_ratios: HashMap::new(),
+            backstop,
+            last_caps: HashMap::new(),
+        }
+    }
+
+    /// Test-only read access to the backstop store.
+    #[cfg(test)]
+    pub fn backstop_store(&self) -> &JobBackstopStore {
+        &self.backstop
+    }
+
     pub fn force_arm_for_test(&mut self) {
         self.policy.arm = SystemArm::Armed;
     }
@@ -303,12 +324,44 @@ impl Runtime {
     }
 }
 
+#[cfg(test)]
+mod test_support {
+    use std::cell::RefCell;
+
+    use crate::gate::GateMeasurement;
+
+    thread_local! {
+        static TRIM_STUB: RefCell<Option<Result<GateMeasurement, String>>> = const {
+            RefCell::new(None)
+        };
+    }
+
+    pub fn set_trim_measurement_stub(m: Result<GateMeasurement, String>) {
+        TRIM_STUB.with(|c| *c.borrow_mut() = Some(m));
+    }
+
+    pub fn take_trim_measurement_stub() -> Option<Result<GateMeasurement, String>> {
+        TRIM_STUB.with(|c| c.borrow_mut().take())
+    }
+}
+
+/// Inject a gate measurement for the next `tick_with_groups` SoftTrim (unit tests only).
+#[cfg(test)]
+pub fn set_trim_measurement_stub(m: Result<GateMeasurement, String>) {
+    test_support::set_trim_measurement_stub(m);
+}
+
 /// Measured soft-trim via the shared gate §2.3 owner (`run_gate_on_group`).
 fn measured_soft_trim(
     group: &AppGroup,
     rate_limits: &mut HashMap<String, Instant>,
     now: Instant,
 ) -> Result<GateMeasurement, String> {
+    #[cfg(test)]
+    if let Some(stub) = test_support::take_trim_measurement_stub() {
+        return stub;
+    }
+
     let hooks = LiveTrimHooks;
     let mut ctx = TrimContext {
         hooks: &hooks,
@@ -322,20 +375,7 @@ fn measured_soft_trim(
 #[cfg(test)]
 impl Runtime {
     fn with_backstop(backstop: JobBackstopStore) -> Self {
-        Self {
-            policy: PolicyState::new(),
-            groups: HashMap::new(),
-            rates: HashMap::new(),
-            diagnostics: DiagnosticsRing::new(),
-            path_cache: crate::scanner::PathCache::new(),
-            commit_ratios: HashMap::new(),
-            backstop,
-            last_caps: HashMap::new(),
-        }
-    }
-
-    fn backstop_store(&self) -> &JobBackstopStore {
-        &self.backstop
+        Self::new_with_backstop_store(backstop)
     }
 
     fn arm_backstop_if_ready_for_test(
@@ -356,7 +396,8 @@ mod tests {
     use std::time::Duration;
 
     use crate::config::GroupConfig;
-    use crate::fsm::{FsmAction, GroupPhase};
+    use crate::fsm::{FsmAction, GroupPhase, TRIM_TARGET_RATIO};
+    use crate::gate::{GateMeasurement, GATE_SETTLE};
     use crate::grouper::GroupMember;
     use crate::job_backstop::{BackstopError, BackstopHooks, JobBackstopStore, JobHandle};
     use crate::pressure::SimulatedPressure;
@@ -479,6 +520,33 @@ mod tests {
         }
     }
 
+    fn ineffective_trim_measurement(
+        key: &str,
+        pid: u32,
+        cap: u64,
+        gf: u64,
+    ) -> GateMeasurement {
+        let target = (TRIM_TARGET_RATIO * cap as f64) as u64;
+        GateMeasurement {
+            group_key: key.into(),
+            target_pids: vec![pid],
+            trimmed_pids: vec![pid],
+            excluded_pids: vec![],
+            rate_limited: false,
+            gf0: gf,
+            gf1: target.saturating_add(1).max(gf),
+            available0: 0,
+            available1: 0,
+            cs0: Some(0),
+            cs1: Some(0),
+            ry_bench: None,
+            ry_live: Some(0.5),
+            verdict: None,
+            settle: GATE_SETTLE,
+            trim_errors: vec![],
+        }
+    }
+
     #[test]
     fn rate_limit_skips_second_trim() {
         let cfg = RamjobConfig {
@@ -576,6 +644,59 @@ mod tests {
         let cr = rt.commit_ratios.get("hog").expect("sampled");
         assert_eq!(cr.samples(), 1);
         assert!((cr.ratio() - 2.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn tick_with_groups_soft_trim_follow_backstop_arms_mock_store() {
+        let cap = 100_000_000u64;
+        let gf = 150_000_000u64;
+        let commit = 200_000_000u64;
+        let pid = 42u32;
+        let key = "hog";
+        let mut rt = Runtime::with_backstop(JobBackstopStore::with_hooks(Box::new(
+            MockBackstopHooks::new(),
+        )));
+        seed_commit_ratio(&mut rt, key, commit, gf);
+        let cfg = RamjobConfig {
+            version: 2,
+            runaway_multiplier: 3.0,
+            overall_limit_bytes: 0,
+            groups: vec![hog_group(cap)],
+            pause_all: false,
+        };
+        let app = app(key, pid, gf, commit);
+        let t0 = Instant::now();
+
+        for (i, offset) in [(0u64, 0), (1, 21), (2, 42)] {
+            super::set_trim_measurement_stub(Ok(ineffective_trim_measurement(
+                key, pid, cap, gf,
+            )));
+            let out = rt
+                .tick_with_groups(
+                    &cfg,
+                    SystemArm::Armed,
+                    &[app.clone()],
+                    t0 + Duration::from_secs(offset),
+                )
+                .unwrap();
+            assert_eq!(out.trims_attempted, 1, "tick {i} should SoftTrim");
+        }
+
+        let store = rt.backstop_store();
+        assert!(store.has_group(key));
+        assert!(store.assigned_pids(key).unwrap().contains(&pid));
+        let ratio = commit as f64 / gf as f64;
+        let expected_limit = crate::commit_ratio::translate_job_limit(cap, ratio);
+        assert_eq!(store.memory_limit(key), Some(Some(expected_limit)));
+        let diag = rt.diagnostics.lines().join("\n");
+        assert!(
+            diag.contains("follow=Backstop"),
+            "expected observe_post_trim follow=Backstop, got:\n{diag}"
+        );
+        assert!(
+            diag.contains("BACKSTOP arm limit="),
+            "expected arm diagnostic, got:\n{diag}"
+        );
     }
 
     #[test]
